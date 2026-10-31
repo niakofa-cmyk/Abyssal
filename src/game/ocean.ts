@@ -8,6 +8,7 @@ import {
   stepSim,
 } from "./sim.ts";
 import { TILE, ZONES, type Facing, type Projectile, type RegionId, type Seat, type Sim, type Vehicle } from "./types.ts";
+import { casesClosedBy } from "./archive.ts";
 
 export const REGIONS: RegionId[] = ["breach", "plains", "city", "works", "reef"];
 
@@ -96,6 +97,7 @@ export type OceanSnap = {
   toasts: string[];
   events: string[];
   seen: string[];
+  found: string[];
   explored: Record<RegionId, number[]>;
   roster: SectorReport[];
 };
@@ -149,6 +151,7 @@ export type OceanBody = {
     { time: number; creatures: CreatureSave[]; vehicles: VehicleSave[]; taken: string[]; projectiles: OceanSnap["projectiles"] }
   >;
   divers: DiverSave[];
+  found?: string[];
   players: { token: string; callsign: string; seen: string[]; explored: Record<RegionId, number[]>; stash: DiverSave | null }[];
 };
 
@@ -213,6 +216,8 @@ export class Ocean {
   flags: Sim["flags"];
   sectors: Record<RegionId, Sim>;
   players = new Map<string, OceanPlayer>();
+  /** Shared records. A case can close even when no single diver has read every piece. */
+  found: string[] = [];
 
   constructor() {
     const sectors = {} as Record<RegionId, Sim>;
@@ -275,7 +280,7 @@ export class Ocean {
       adrift: false,
       stash: null,
     });
-    this.toast(id, "You are alone in this sector. The air is already leaving.");
+    this.toast(id, "You woke in the dark. The air is leaving. Something crossed the east lock before the blast.");
     return id;
   }
 
@@ -422,6 +427,7 @@ export class Ocean {
       toasts: player.toasts.map((c) => c.text),
       events,
       seen: player.seen,
+      found: this.found,
       explored: player.explored,
       roster: this.roster(),
     };
@@ -528,6 +534,7 @@ export class Ocean {
       flags: { ...this.flags },
       sectors,
       divers,
+      found: this.found,
       players: [...this.players.values()].map((p) => ({
         token: p.token,
         callsign: p.callsign,
@@ -542,6 +549,11 @@ export class Ocean {
     const ocean = new Ocean();
     if (body?.v !== 1 || !body.sectors || !body.flags) return ocean;
     ocean.flags = { ...ocean.flags, ...body.flags };
+    const found = new Set<string>(Array.isArray(body.found) ? body.found : []);
+    for (const player of body.players ?? []) {
+      for (const id of player.seen ?? []) found.add(id);
+    }
+    ocean.found = [...found];
     for (const id of REGIONS) {
       const saved = body.sectors[id];
       const sim = ocean.sectors[id];
@@ -810,7 +822,21 @@ export class Ocean {
       if (Math.hypot(marker.x - diver.x, marker.y - diver.y) > 40) continue;
       if (!player.seen.includes(marker.logId)) {
         player.seen.push(marker.logId);
-        this.toast(player.token, "A record. It is in the journal.");
+        this.toast(
+          player.token,
+          marker.logId === "breach-sonar"
+            ? "A sonar return. The watch crossed out the name. The loft air is still first."
+            : marker.logId === "breach-shadow"
+              ? "Two watches. One says a hull. The other says it turned. The loft air is still first."
+              : "A record. It is in the journal.",
+        );
+      }
+      if (!this.found.includes(marker.logId)) {
+        const before = this.found.slice();
+        this.found.push(marker.logId);
+        for (const line of casesClosedBy(before, marker.logId)) {
+          for (const other of this.players.values()) this.toast(other.token, line);
+        }
       }
     }
     for (const creature of sim.creatures) {
@@ -872,6 +898,7 @@ export function applyOceanView(sim: Sim, selfId: string, snap: OceanSnap) {
   sim.time = snap.time;
   sim.flags = { ...snap.flags };
   sim.discovered = [...snap.seen];
+  sim.shared = [...(snap.found ?? [])];
   for (const id of REGIONS) {
     const incoming = snap.explored[id];
     if (!incoming) continue;

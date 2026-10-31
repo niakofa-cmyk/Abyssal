@@ -175,6 +175,8 @@ export type Sim = {
   markers: Marker[];
   taken: string[];
   discovered: string[];
+  /** Records any diver in this ocean has recovered. Empty outside the shared sea. */
+  shared: string[];
   explored: Record<RegionId, number[]>;
   flags: {
     mawDead: boolean;

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { hurtDiver, createSim, findDiver, objective, pressUse, stepSim } from "./sim.ts";
-import { TILE } from "./types.ts";
+import { TILE, ZONES } from "./types.ts";
 import { understanding } from "./understanding.ts";
+import { archiveOf, casesClosedBy, mawStages } from "./archive.ts";
+import { createOpening, stepOpening } from "./opening.ts";
+import { stepVision, visionDone } from "./vision.ts";
 import { buildLayout, isSolid } from "./world.ts";
 
 describe("abyssal sim", () => {
@@ -178,5 +181,67 @@ describe("abyssal sim", () => {
     early.discovered.push("breach-order");
     assert.equal(understanding(early, diver).id, "discovery");
     assert.equal(understanding(early, diver).index > 1, true);
+  });
+
+  it("reconstructs an investigation only when every piece is known, and does not lock the loft", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    assert.ok(you);
+    assert.match(objective(sim, you), /loft/i);
+    const fresh = archiveOf([]);
+    assert.equal(fresh.closed, 0);
+    assert.equal(fresh.timeline[0]?.known, true);
+    assert.equal(fresh.timeline[1]?.known, false);
+
+    const partial = archiveOf(["breach-blackbox", "breach-order"]);
+    const heart = partial.cases.find((item) => item.id === "heart");
+    assert.ok(heart);
+    assert.equal(heart.closed, false);
+    assert.equal(heart.have, 2);
+    assert.equal(understanding(sim, you).id, "catastrophe");
+
+    sim.discovered.push("breach-loft");
+    assert.equal(understanding(sim, you).id, "catastrophe");
+    const named = archiveOf(sim.discovered);
+    assert.equal(named.timeline.find((beat) => beat.id === "lived")?.known, true);
+    assert.equal(named.stations.some((station) => station.read && station.id === "breach-loft"), true);
+
+    const closed = casesClosedBy(["breach-blackbox", "breach-order"], "works-vent");
+    assert.equal(closed.length, 1);
+    const done = archiveOf(["breach-blackbox", "breach-order"], ["breach-blackbox", "breach-order", "works-vent"]);
+    assert.equal(done.cases.find((item) => item.id === "heart")?.closed, true);
+    assert.equal(done.stations.find((station) => station.id === "works-vent")?.read, false);
+  });
+
+  it("walks the warning into the blast, and the sonar is not yet the accident", () => {
+    let still = createOpening();
+    for (let i = 0; i < 400; i++) still = stepOpening(still, 0.05, 0);
+    assert.equal(still.done, true);
+    assert.equal(still.beat, "wake");
+
+    let walked = createOpening();
+    for (let i = 0; i < 40; i++) walked = stepOpening(walked, 0.05, 1);
+    assert.equal(walked.beat === "deck", false);
+    const sealed = stepOpening({ beat: "alarm", x: 400, t: 1.2, flood: 0, done: false }, 0.05, 1);
+    assert.ok(sealed.x <= 330);
+
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    assert.ok(you);
+    sim.discovered.push("breach-sonar");
+    assert.equal(understanding(sim, you).id, "catastrophe");
+    assert.match(objective(sim, you), /loft/i);
+    const stages = mawStages(sim.discovered);
+    assert.equal(stages.find((stage) => stage.id === "signs")?.known, true);
+    assert.equal(stages.find((stage) => stage.id === "why")?.known, false);
+    sim.discovered.push("breach-shadow");
+    assert.equal(understanding(sim, you).id, "catastrophe");
+    let plate = 0;
+    while (!visionDone(plate)) plate = stepVision(plate, 0.05);
+    assert.ok(plate >= 7);
+    assert.equal(ZONES.find((zone) => zone.id === "surface")?.state, "sealed");
+    const sonar = sim.markers.find((marker) => marker.logId === "breach-sonar");
+    assert.ok(sonar);
+    assert.equal(isSolid(sim.regions.breach, sonar.x, sonar.y, false), false);
   });
 });

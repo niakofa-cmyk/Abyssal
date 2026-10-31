@@ -9,9 +9,21 @@ export const LOGS: Record<string, LogEntry> = {
     title: "Unsent evacuation",
     body: "All nonessential crews to the collar locks. Do not wait for the tram. If the heart vents, the shelf will fold and the city will drink the dark. This message was still in the outbox.",
   },
+  "breach-sonar": {
+    title: "Sonar, unnamed return",
+    body: "Something larger than a hull crossed the east lock twice before the spike. The watch wrote lantern, then crossed the word out. The heart had not failed yet.",
+  },
+  "breach-shadow": {
+    title: "Two watches, one hour",
+    body: "The second watch logged a loose hull. The first watch crossed that out and wrote that it turned, toward the heart. Hulls do not turn. Neither watch signed it.",
+  },
   "breach-bio": {
     title: "Specimen note, unsigned",
     body: "The ribbon eels left the reef lights three days before the blast. They gathered on the warm pipes. Whatever we woke down there, it already knew the shape of our hulls.",
+  },
+  "breach-loft": {
+    title: "A name in the loft glass",
+    body: "Someone wrote a name in the condensation, and a date that is only a month. Under it: oranges on Friday if the tram runs. The glass is cracked. The name is not.",
   },
   "plains-city": {
     title: "Shelf census, page torn",

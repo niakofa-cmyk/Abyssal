@@ -34,6 +34,8 @@ The journal and the dive HUD derive a level from the ocean that already exists. 
 
 The opening order still points at the loft canister. Understanding is not a new database column. Flags, discoveries, explored water, and taken canisters already persist with the ocean.
 
+The story blueprint is [STORY.md](./STORY.md). The archive is that blueprint's first slice: timeline, three investigations, and six kinds of station, derived from records already in the water plus one personal note in the loft. It does not add a region.
+
 ## Where the systems should go
 
 These are the directions to protect while the expedition is finished. They are not a request to add a region.

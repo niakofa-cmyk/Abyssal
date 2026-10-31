@@ -96,4 +96,12 @@ export class SeaAudio {
       }
     }
   }
+
+  /** The gantry only. Alarm, water, then the blast. */
+  cue(kind: "alarm" | "flood" | "blast" | "wake") {
+    if (kind === "alarm") this.tone(196, 0.22, "triangle", 0.07, "sfx");
+    if (kind === "flood") this.tone(82, 0.55, "sine", 0.06, "sfx");
+    if (kind === "blast") this.burst(0.5, 0.32);
+    if (kind === "wake") this.tone(48, 0.9, "sine", 0.05, "sfx");
+  }
 }

@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 import { resolveDatabaseMode } from "../../scripts/db-mode.mjs";
 
@@ -139,13 +141,22 @@ function createPostgresSql(connectionString: string): Promise<Sql> {
   return globalRef.__pgSqlPromise__;
 }
 
+function pgliteDataDir() {
+  const fromEnv = process.env.ABYSSAL_PGLITE_DIR?.trim();
+  const dir = fromEnv || join(process.cwd(), ".data", "pglite");
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 async function createPgliteSql(): Promise<Sql> {
-  // Embedded Postgres, imported on demand so it never loads on the Neon path.
-  // One in-memory instance per process, shared across HMR module instances, so
-  // data survives source edits (it resets on dev-server restart).
+  // Embedded Postgres, imported on demand so it never loads on the PostgreSQL path.
+  // One file-backed instance per process. The directory survives a restart of
+  // this process. Production never reaches here: a missing DATABASE_URL fails
+  // closed before this function is called.
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
-    const pg = new PGlite({
+    const dataDir = pgliteDataDir();
+    const pg = new PGlite(dataDir, {
       parsers: {
         [OID_INT8]: Number,
         [OID_DATE]: identity,

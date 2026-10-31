@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Anchor, BookOpen, Map, Radio, Volume2, VolumeX } from "lucide-react";
 import { StageMap } from "@/components/abyssal/StageMap";
-import { BESTIARY, LOGS } from "@/game/content";
+import { BESTIARY } from "@/game/content";
+import { archiveOf, KIND_LABEL, mawStages } from "@/game/archive";
 import { DescentLink } from "@/game/link";
 import { SeaAudio } from "@/game/audio";
 import { DIVER_TOKEN, OceanClient, glideOcean } from "@/game/ocean-client";
@@ -35,8 +36,11 @@ import {
   velocityOf,
   hullStage,
 } from "@/game/sim";
-import { VIEW_H, VIEW_W, ZONES, TILE, type Diver, type RegionId, type Seat, type Sim } from "@/game/types";
+import { VIEW_H, VIEW_W, ZONES, TILE, type Diver, type RegionId, type Sim } from "@/game/types";
+import { Opening } from "@/components/abyssal/Opening";
+import { SurfaceVision } from "@/components/abyssal/SurfaceVision";
 import { understanding, UNDERSTANDING } from "@/game/understanding";
+import { drawPassage } from "@/game/opening";
 
 type Overlay = "none" | "map" | "journal" | "pause" | "dead";
 
@@ -63,6 +67,9 @@ type Session = {
   reduced: boolean;
   ocean: OceanClient | null;
   seenRegion: RegionId | "";
+  /** Seconds of the unnamed shape crossing the breach after a fresh warning. */
+  passage: number;
+  visionSeen: Set<string> | null;
   /** Scripted steer for the ocean probe. Keys always win when the diver is actually holding them. */
   hold: { ax: number; ay: number; fire: boolean; aimX: number; aimY: number } | null;
 };
@@ -448,8 +455,9 @@ function Meter({ label, value, tone }: { label: string; value: number; tone: "bi
 export function GameApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sessionRef = useRef<Session | null>(null);
+  const seaRef = useRef<SeaAudio | null>(null);
   const [profile, setProfile] = useState<Profile>(BLANK_PROFILE);
-  const [mode, setMode] = useState<"menu" | "play">("menu");
+  const [mode, setMode] = useState<"menu" | "opening" | "play">("menu");
   const [overlay, setOverlay] = useState<Overlay>("none");
   const [hud, setHud] = useState<Hud | null>(null);
   const [resumeOk, setResumeOk] = useState(false);
@@ -458,6 +466,9 @@ export function GameApp() {
   const [fault, setFault] = useState("");
   const [heldBeacon, setHeldBeacon] = useState(false);
   const diving = useRef(false);
+  const warned = useRef(false);
+  const visionOn = useRef(false);
+  const [vision, setVision] = useState(false);
 
   useEffect(() => {
     setProfile(loadProfile());
@@ -664,6 +675,21 @@ export function GameApp() {
           session.selfId,
         );
         ctx.restore();
+        if (you.region === "breach" && session.passage > 0) {
+          drawPassage(ctx, 7 - session.passage);
+          session.passage = Math.max(0, session.passage - frameDt);
+        }
+      }
+      if (session.visionSeen === null) session.visionSeen = new Set(session.sim.discovered);
+      else if (!visionOn.current) {
+        for (const id of ["plains-surface", "reef-collar"] as const) {
+          if (session.sim.discovered.includes(id) && !session.visionSeen.has(id)) {
+            session.visionSeen.add(id);
+            visionOn.current = true;
+            setVision(true);
+            break;
+          }
+        }
       }
       if (session.hudAcc > 0.12) {
         session.hudAcc = 0;
@@ -680,7 +706,8 @@ export function GameApp() {
     if (diving.current) return;
     diving.current = true;
     setFault("");
-    const audio = sessionRef.current?.audio ?? new SeaAudio();
+    const audio = seaRef.current ?? new SeaAudio();
+    seaRef.current = audio;
     audio.unlock();
     audio.setMuted(profile.muted);
     const name = profile.callsign.trim() || "Unmarked";
@@ -712,6 +739,8 @@ export function GameApp() {
         reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
         ocean,
         seenRegion: "",
+        passage: warned.current ? 7 : 0,
+        visionSeen: null,
         hold: null,
       };
       const you = findDiver(sim, token);
@@ -725,6 +754,7 @@ export function GameApp() {
       saveProfile({ ...profile, linkMode: "ocean", partner: false, soren: false });
       setHeldBeacon(true);
       setMode("play");
+      warned.current = false;
       setOverlay("none");
       setHud(readHud(session));
     } catch (err) {
@@ -802,6 +832,8 @@ export function GameApp() {
       reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       ocean: null,
       seenRegion: "",
+      passage: 0,
+      visionSeen: null,
       hold: null,
     };
     sessionRef.current = session;
@@ -837,16 +869,17 @@ export function GameApp() {
             <h1 className="font-display mt-3 text-5xl leading-none text-foam md:text-7xl">Abyssal</h1>
             <p className="font-display mt-2 text-2xl text-amber">The Last Ascent</p>
             <p className="mt-5 max-w-md text-base leading-relaxed text-mist">
-              You come to under the torn grid with the air already leaving. The ocean keeps going when you look
-              away. Another diver is in your sector only when your paths meet. The plains can be burning while
-              the breach stays quiet.
+              You come to under the torn grid with the air already leaving. The wreck still holds records, and they do not
+              agree. The ocean keeps going when you look away. Another diver is in your sector only when your paths
+              meet. The plains can be burning while the breach stays quiet.
             </p>
           </header>
           <form
             className="grid max-w-xl gap-4 border border-line bg-abyss/90 p-4 md:p-5"
             onSubmit={(event) => {
               event.preventDefault();
-              void beginOcean();
+              if (heldBeacon) void beginOcean();
+              else setMode("opening");
             }}
           >
             <label className="grid gap-1 text-sm">
@@ -861,7 +894,14 @@ export function GameApp() {
             </label>
             {fault ? <p className="text-sm text-amber">{fault}</p> : null}
             <div className="flex flex-wrap gap-3">
-              <button type="button" className="h-12 bg-biolume px-5 font-medium text-deep" onClick={() => void beginOcean()}>
+              <button
+                type="button"
+                className="h-12 bg-biolume px-5 font-medium text-deep"
+                onClick={() => {
+                  if (heldBeacon) void beginOcean();
+                  else setMode("opening");
+                }}
+              >
                 {heldBeacon ? "Return to your dive" : "Enter the ocean"}
               </button>
               {heldBeacon ? (
@@ -945,6 +985,10 @@ export function GameApp() {
         </div>
       </main>
     );
+  }
+
+  if (mode === "opening") {
+    return <Opening audio={seaRef.current ?? (seaRef.current = new SeaAudio())} onDone={() => { warned.current = true; void beginOcean(); }} />;
   }
 
   return (
@@ -1086,7 +1130,7 @@ export function GameApp() {
                   <li>Arrows and L are Imani, if she launched with you. V holds Soren in this sector.</li>
                   <li>Tab cycles seats. The helm steers. The tube fires. The pumps brace. The sea keeps the booking.</li>
                   <li>If your signal drops, the seat opens. Coming back puts you where you left the water.</li>
-                  <li>The journal keeps what this expedition has come to understand. It does not unlock a door.</li>
+                  <li>The journal keeps what this expedition has come to understand. Records can disagree until the pieces meet. It does not unlock a door.</li>
                 </ul>
                 <div className="mt-5 flex gap-3">
                   <button type="button" className="h-11 bg-biolume px-4 text-deep" onClick={() => {
@@ -1129,6 +1173,7 @@ export function GameApp() {
           </div>
         </section>
       ) : null}
+      {vision ? <SurfaceVision onDone={() => setVision(false)} /> : null}
     </main>
   );
 
@@ -1379,6 +1424,9 @@ function Chart({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
           </li>
         ))}
       </ul>
+      <p className="mt-3 text-xs text-mist">
+        The surface is not a mode. Light in the reef, a broken signal, and a sealed collar are all it will give you until the ascent is earned.
+      </p>
     </div>
   );
 }
@@ -1387,11 +1435,11 @@ function Journal({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
   if (!sim) return null;
   const you = findDiver(sim, selfId);
   const grasp = understanding(sim, you);
-  const logs = sim.discovered.filter((id) => LOGS[id]);
+  const archive = archiveOf(sim.discovered, sim.shared);
   const beasts = sim.discovered.filter((id) => id.startsWith("beast:"));
   return (
     <div>
-      <h2 className="font-display text-3xl">Journal</h2>
+      <h2 className="font-display text-3xl">Archive</h2>
       <p className="mt-2 text-[10px] tracking-[0.18em] text-amber uppercase">
         Understanding · {grasp.index + 1} of {UNDERSTANDING.length}
       </p>
@@ -1405,15 +1453,61 @@ function Journal({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
           </li>
         ))}
       </ol>
-      {logs.length === 0 ? <p className="mt-4 text-sm text-mist">Nothing written down yet. Swim into the glowing desks.</p> : null}
-      <div className="mt-3 space-y-4">
-        {logs.map((id) => (
-          <article key={id}>
-            <h3 className="text-amber">{LOGS[id]?.title}</h3>
-            <p className="mt-1 text-sm leading-relaxed text-mist">{LOGS[id]?.body}</p>
+
+      <h3 className="mt-6 text-xs tracking-[0.16em] text-biolume uppercase">Timeline</h3>
+      <ol className="mt-2 space-y-1 text-sm">
+        {archive.timeline.map((beat) => (
+          <li key={beat.id} className={beat.known ? "text-foam" : "text-mist"}>
+            {beat.known ? beat.label : "Still dark"}
+          </li>
+        ))}
+      </ol>
+
+      <h3 className="mt-6 text-xs tracking-[0.16em] text-biolume uppercase">The lantern</h3>
+      <ol className="mt-2 space-y-1 text-sm">
+        {mawStages([...sim.discovered, ...sim.shared]).map((stage) => (
+          <li key={stage.id} className={stage.known ? "text-foam" : "text-mist"}>
+            {stage.known ? stage.label : "Still dark"}
+          </li>
+        ))}
+      </ol>
+
+      <h3 className="mt-6 text-xs tracking-[0.16em] text-biolume uppercase">Investigations</h3>
+      <div className="mt-2 space-y-4">
+        {archive.cases.map((item) => (
+          <article key={item.id}>
+            <h3 className="text-amber">{item.title}</h3>
+            <p className="mt-1 text-sm leading-relaxed text-mist">
+              {item.closed ? item.reconstruction : item.question}
+            </p>
+            <p className="mt-1 text-xs tracking-[0.08em] text-foam uppercase">
+              {item.closed
+                ? "Reconstructed"
+                : `${item.have} of ${item.total} · still missing ${item.missing.join(", ")}`}
+            </p>
           </article>
         ))}
       </div>
+
+      <h3 className="mt-6 text-xs tracking-[0.16em] text-biolume uppercase">Stations</h3>
+      {archive.stations.length === 0 ? (
+        <p className="mt-2 text-sm text-mist">Nothing written down yet. Swim into the glowing desks.</p>
+      ) : (
+        <div className="mt-2 space-y-4">
+          {archive.stations.map((station) => (
+            <article key={station.id}>
+              <p className="text-[10px] tracking-[0.16em] text-biolume uppercase">
+                {KIND_LABEL[station.kind]} · {station.place}
+              </p>
+              <h3 className="text-amber">{station.title}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-mist">
+                {station.read ? station.body : "Another diver recovered this. You have not read it."}
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
+
       {beasts.length ? (
         <div className="mt-5">
           <h3 className="text-xs tracking-[0.16em] text-biolume uppercase">Seen</h3>

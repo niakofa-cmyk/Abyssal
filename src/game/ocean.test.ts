@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Ocean } from "./ocean.ts";
 import { TILE } from "./types.ts";
+import { archiveOf } from "./archive.ts";
 
 function intent(partial: Partial<{ ax: number; ay: number; aimX: number; aimY: number; fire: boolean; use: boolean }> = {}) {
   return { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, ...partial };
@@ -28,6 +29,20 @@ describe("regional ocean", () => {
     assert.ok(adaSnap.creatures.every((c) => c.region === "breach"));
     assert.ok(adaSnap.roster.find((r) => r.id === "works")?.divers.some((d) => d.name === "Bo"));
     assert.ok(adaSnap.roster.find((r) => r.id === "breach")?.divers.some((d) => d.name === "Ada"));
+    assert.match(adaSnap.toasts[0] ?? "", /east lock/);
+  });
+
+  it("files the unnamed return without closing the heart", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    ocean.place(ada, "breach", 12.5 * TILE, 9 * TILE);
+    ocean.step(1 / 20);
+    const snap = ocean.snapshot(ada);
+    assert.ok(snap.seen.includes("breach-sonar"));
+    assert.ok(snap.toasts.some((line) => /crossed out the name/i.test(line)));
+    const archive = archiveOf(snap.seen, snap.found);
+    assert.equal(archive.timeline.find((beat) => beat.id === "sign")?.known, true);
+    assert.equal(archive.cases.find((item) => item.id === "heart")?.closed, false);
   });
 
   it("shares one Maw and lets a late diver join the same fight", () => {
@@ -62,6 +77,37 @@ describe("regional ocean", () => {
     assert.ok(revived.sectors.plains.creatures.find((c) => c.id === "p-maw")!.hp < before);
     assert.equal(revived.locate(ada)?.region, "plains");
     assert.equal(revived.locate(bo)?.region, "breach");
+  });
+
+  it("closes an investigation from records no single diver has finished", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const bo = ocean.join(null, "Bo");
+    const blackbox = ocean.sectors.breach.markers.find((marker) => marker.logId === "breach-blackbox");
+    const order = ocean.sectors.breach.markers.find((marker) => marker.logId === "breach-order");
+    const vent = ocean.sectors.works.markers.find((marker) => marker.logId === "works-vent");
+    assert.ok(blackbox && order && vent);
+    ocean.place(ada, "breach", blackbox.x, blackbox.y);
+    ocean.step(1 / 20);
+    ocean.place(ada, "breach", order.x, order.y);
+    ocean.step(1 / 20);
+    ocean.place(bo, "works", vent.x, vent.y);
+    ocean.step(1 / 20);
+    const adaSnap = ocean.snapshot(ada);
+    const boSnap = ocean.snapshot(bo);
+    assert.equal(adaSnap.seen.includes("works-vent"), false);
+    assert.equal(boSnap.seen.includes("breach-blackbox"), false);
+    assert.ok(adaSnap.found.includes("works-vent"));
+    const adaArchive = archiveOf(adaSnap.seen, adaSnap.found);
+    const boArchive = archiveOf(boSnap.seen, boSnap.found);
+    assert.equal(adaArchive.cases.find((item) => item.id === "heart")?.closed, true);
+    assert.equal(boArchive.cases.find((item) => item.id === "heart")?.closed, true);
+    assert.equal(boArchive.stations.find((station) => station.id === "breach-blackbox")?.read, false);
+    assert.ok(adaSnap.toasts.some((line) => line.includes("heart was already failing")));
+    assert.ok(boSnap.toasts.some((line) => line.includes("heart was already failing")));
+    const revived = Ocean.revive(ocean.toBody());
+    assert.ok(revived.found.includes("works-vent"));
+    assert.ok(revived.found.includes("breach-blackbox"));
   });
 
   it("books a seat once and keeps the diver on reconnect", () => {

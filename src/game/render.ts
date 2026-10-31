@@ -115,6 +115,10 @@ export function drawSea(
     ctx.fillStyle = "rgba(2, 8, 12, 0.38)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   }
+  if (regionId === "reef") {
+    ctx.fillStyle = "rgba(186, 214, 204, 0.16)";
+    ctx.fillRect(0, 0, VIEW_W, 36);
+  }
 
   const x0 = Math.max(0, Math.floor(camX / TILE) - 1);
   const x1 = Math.min(region.w - 1, Math.ceil((camX + VIEW_W) / TILE) + 1);
@@ -165,6 +169,11 @@ export function drawSea(
         ctx.strokeRect(x + 4, y + 4, TILE - 8, TILE - 8);
       }
     }
+  }
+
+  if (regionId === "breach") {
+    gouge(ctx, camX, camY, 11 * TILE, 3 * TILE + 18);
+    gouge(ctx, camX, camY, 13 * TILE + 8, 13 * TILE + 6);
   }
 
   for (const marker of sim.markers) {
@@ -268,6 +277,22 @@ export function drawSea(
   ctx.fillStyle = "rgba(2, 8, 12, 0.45)";
   ctx.fillRect(0, 0, VIEW_W, 18);
   ctx.fillRect(0, VIEW_H - 22, VIEW_W, 22);
+}
+
+function gouge(ctx: CanvasRenderingContext2D, camX: number, camY: number, x: number, y: number) {
+  const p = screen(camX, camY, x, y);
+  if (p.x < -40 || p.y < -40 || p.x > VIEW_W + 40 || p.y > VIEW_H + 40) return;
+  ctx.strokeStyle = "rgba(231, 160, 74, 0.7)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + 22, p.y - 10);
+  ctx.moveTo(p.x + 6, p.y + 4);
+  ctx.lineTo(p.x + 28, p.y - 4);
+  ctx.moveTo(p.x + 2, p.y + 10);
+  ctx.lineTo(p.x + 18, p.y + 2);
+  ctx.stroke();
+  ctx.lineWidth = 1;
 }
 
 function drawVehicle(

@@ -15,6 +15,7 @@ import type {
 } from "./types.ts";
 import { TILE } from "./types.ts";
 import { isSolid, tileAt, buildLayout } from "./world.ts";
+import { casesClosedBy } from "./archive.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -160,6 +161,7 @@ export function createSim(opts: SpawnOpts): Sim {
     markers: layout.markers,
     taken: [],
     discovered: [],
+    shared: [],
     explored: {
       breach: chunks(Math.ceil(layout.regions.breach.w / 4)),
       plains: chunks(Math.ceil(layout.regions.plains.w / 4)),
@@ -1299,10 +1301,11 @@ function explore(sim: Sim, diver: Diver) {
     if (marker.kind !== "lore" || !marker.logId || marker.region !== diver.region) continue;
     if (hypot(marker.x - diver.x, marker.y - diver.y) > 40) continue;
     if (marker.logId === "plains-surface") sim.flags.collarRead = true;
-    const before = sim.discovered.length;
+    const before = sim.discovered.slice();
     discover(sim, marker.logId);
-    if (sim.discovered.length !== before && diver.kind === "you") {
+    if (sim.discovered.length !== before.length && diver.kind === "you") {
       note(sim, "A record. It is in the journal.");
+      for (const line of casesClosedBy(before, marker.logId)) note(sim, line);
     }
   }
   for (const c of sim.creatures) {

@@ -278,7 +278,9 @@ function tokenIdentityKey(token: string): string {
             .digest("base64url");
         }
       }
-    } catch {}
+    } catch {
+      // A token that is not a JWT still identifies the caller by its raw bytes.
+    }
   }
   return createHash("sha256").update(token).digest("base64url");
 }
