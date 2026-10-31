@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import {
+  collectPgliteDestinations,
   looksLikePreviewProcess,
   parseListenerInodes,
   parsePgid,
   parsePid,
   parsePreviewArgs,
+  previewDatabaseEnv,
   previewOwners,
   stopOutcome,
   terminatePids,
@@ -255,3 +260,36 @@ test("terminatePids on a free port signals nothing", async () => {
   assert.deepEqual(result, { signalled: [], killed: [], stubborn: [] });
   assert.deepEqual(fake.signals, []);
 });
+
+test("preview selects PGlite or PostgreSQL on purpose", () => {
+  assert.equal(previewDatabaseEnv({ NODE_ENV: "production" }).ABYSSAL_DB, "pglite");
+  assert.equal(
+    previewDatabaseEnv({ NODE_ENV: "production", DATABASE_URL: "  " }).ABYSSAL_DB,
+    "pglite",
+  );
+  assert.equal(
+    previewDatabaseEnv({ DATABASE_URL: "postgres://db/abyssal" }).ABYSSAL_DB,
+    "postgres",
+  );
+  assert.equal(
+    previewDatabaseEnv({ ABYSSAL_DB: "pglite", DATABASE_URL: "postgres://db/abyssal" }).ABYSSAL_DB,
+    "pglite",
+  );
+});
+
+test("PGlite assets are staged beside the loader, not a missing Vercel directory", () => {
+  const root = mkdtempSync(join(tmpdir(), "pglite-stage-"));
+  try {
+    mkdirSync(join(root, "server/chunks"), { recursive: true });
+    mkdirSync(join(root, "server/node_modules/@electric-sql/pglite/dist"), { recursive: true });
+    writeFileSync(join(root, "server/chunks/db.mjs"), 'new URL("./pglite.data", import.meta.url)');
+    writeFileSync(join(root, "server/node_modules/@electric-sql/pglite/dist/index.js"), "module");
+    const dests = collectPgliteDestinations(root);
+    assert.ok(dests.includes(join(root, "server/chunks")));
+    assert.ok(dests.includes(join(root, "server/node_modules/@electric-sql/pglite/dist")));
+    assert.equal(dests.some((dir) => dir.includes(".vercel")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+

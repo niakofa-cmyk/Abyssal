@@ -10,6 +10,7 @@
  *   node scripts/preview.mjs stop|restart
  */
 import { spawn } from "node:child_process";
+import { databaseUrlFrom } from "./db-mode.mjs";
 import {
   copyFileSync,
   existsSync,
@@ -294,18 +295,79 @@ async function waitForReady(failure) {
 }
 
 /**
- * Nitro inlines `@electric-sql/pglite` but drops the sibling wasm/data files
- * the bundle loads via `new URL("./pglite.data", import.meta.url)`. Local
- * preview has no DATABASE_URL, so that bootstrap is fatal. Deployed apps use
- * Neon and never open these files.
+ * The built preview runs with NODE_ENV=production. PGlite is allowed there only
+ * when it is selected on purpose. A URL, when one is present, is PostgreSQL.
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function previewDatabaseEnv(env) {
+  const next = { ...env };
+  if (!String(next.ABYSSAL_DB ?? "").trim()) {
+    next.ABYSSAL_DB = databaseUrlFrom(next) ? "postgres" : "pglite";
+  }
+  return next;
+}
+
+const PGLITE_ASSETS = ["pglite.data", "pglite.wasm", "initdb.wasm"];
+
+/**
+ * Directories inside a Nitro output that may load PGlite by a relative URL.
+ * The traced package dist is one. A bundled chunk that mentions `pglite.data`
+ * is another: the asset has to sit beside that chunk, not in a Vercel function
+ * directory the Node server never opens.
+ * @param {string} outputDir
+ * @returns {string[]}
+ */
+export function collectPgliteDestinations(outputDir) {
+  /** @type {Set<string>} */
+  const dests = new Set();
+  const traced = join(outputDir, "server/node_modules/@electric-sql/pglite/dist");
+  if (existsSync(traced)) dests.add(traced);
+
+  /** @param {string} dir */
+  function walk(dir) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules") continue;
+        walk(path);
+        continue;
+      }
+      if (!/\.(?:mjs|js|cjs)$/.test(entry.name)) continue;
+      let text = "";
+      try {
+        text = readFileSync(path, "utf8");
+      } catch {
+        continue;
+      }
+      if (text.includes("pglite.data")) dests.add(dirname(path));
+    }
+  }
+
+  if (existsSync(outputDir)) walk(outputDir);
+  return [...dests];
+}
+
+/**
+ * Local preview is the path that opens PGlite. Copy the package's own wasm and
+ * data next to the module that loads them, if the tracer left them behind.
+ * Railway with DATABASE_URL never imports this package.
  */
 function stagePgliteArtifacts() {
-  const dest = join(ROOT, ".vercel/output/functions/__server.func/_libs");
   const src = join(ROOT, "node_modules/@electric-sql/pglite/dist");
-  if (!existsSync(dest) || !existsSync(src)) return;
-  for (const name of ["pglite.data", "pglite.wasm", "initdb.wasm"]) {
-    const from = join(src, name);
-    if (existsSync(from)) copyFileSync(from, join(dest, name));
+  const outputDir = join(ROOT, ".output");
+  if (!existsSync(src) || !existsSync(outputDir)) return;
+  for (const dest of collectPgliteDestinations(outputDir)) {
+    for (const name of PGLITE_ASSETS) {
+      const from = join(src, name);
+      const to = join(dest, name);
+      if (existsSync(from) && !existsSync(to)) copyFileSync(from, to);
+    }
   }
 }
 
@@ -318,6 +380,7 @@ async function restart() {
   const child = spawn("npm", ["run", "preview"], {
     cwd: ROOT,
     detached: true,
+    env: previewDatabaseEnv(process.env),
     stdio: ["ignore", log, log],
   });
   child.unref();

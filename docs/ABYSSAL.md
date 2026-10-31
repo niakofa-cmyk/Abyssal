@@ -26,4 +26,6 @@ The frequency under the console is the old browser-to-browser room. The longer h
 
 ## Honest limit
 
-One ocean process journals the world. It is not a separate machine per sector, and a cold restart of the preview database starts a fresh sea. Two browsers on this ocean still share one Maw, one hull, and one gate.
+One ocean process journals the world. It is not a separate machine per sector. Railway runs that process as a Node server against PostgreSQL: the build does not touch the database, the deploy migrates, then `/api/health` has to answer. A missing production database stops the process. It does not open an embedded database.
+
+Local play without `DATABASE_URL` uses an explicit embedded database. That sea is wiped when the process restarts. It is not the deployed ocean, and a cold restart of it starts a fresh sea. Two browsers on one process still share one Maw, one hull, and one gate.

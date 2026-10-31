@@ -170,7 +170,15 @@ export default defineConfig(({ command, isPreview }) => ({
     ...(command === "build" || isPreview
       ? [
           nitro({
-            preset: "vercel",
+            // Railway and the local built preview both run this Node server.
+            // The Vercel serverless preset is a different artifact; do not use it
+            // for one of them and not the other. The gate stays so Nitro does
+            // not open a second port during `vite dev`.
+            preset: "node-server",
+            // Trace the embedded database as a real package. Railway never
+            // imports it when DATABASE_URL is set. Local preview does, and the
+            // package's wasm/data files have to stay beside its module.
+            traceDeps: ["@electric-sql/pglite"],
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

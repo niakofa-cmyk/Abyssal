@@ -1,0 +1,27 @@
+# Railway production: a Node server plus PostgreSQL.
+# The build does not migrate and does not need a live database.
+# preDeployCommand migrates; startCommand serves; /api/health must answer before traffic.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "npm run build"
+watchPatterns = [
+  "src/**",
+  "server/**",
+  "public/**",
+  "migrations/**",
+  "scripts/**",
+  "package.json",
+  "package-lock.json",
+  "vite.config.ts",
+  "tsconfig.json",
+  "railway.toml",
+]
+
+[deploy]
+preDeployCommand = ["npm run db:migrate"]
+startCommand = "node .output/server/index.mjs"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

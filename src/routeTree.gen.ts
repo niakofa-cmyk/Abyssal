@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiOceanRouteImport } from './routes/api/ocean'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiOceanRoute = ApiOceanRouteImport.update({
@@ -31,30 +37,34 @@ const ApiRtcRoute = ApiRtcRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/ocean': typeof ApiOceanRoute
   '/api/rtc': typeof ApiRtcRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/ocean': typeof ApiOceanRoute
   '/api/rtc': typeof ApiRtcRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/ocean': typeof ApiOceanRoute
   '/api/rtc': typeof ApiRtcRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/ocean' | '/api/rtc'
+  fullPaths: '/' | '/api/health' | '/api/ocean' | '/api/rtc'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/ocean' | '/api/rtc'
-  id: '__root__' | '/' | '/api/ocean' | '/api/rtc'
+  to: '/' | '/api/health' | '/api/ocean' | '/api/rtc'
+  id: '__root__' | '/' | '/api/health' | '/api/ocean' | '/api/rtc'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiOceanRoute: typeof ApiOceanRoute
   ApiRtcRoute: typeof ApiRtcRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ocean': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiOceanRoute: ApiOceanRoute,
   ApiRtcRoute: ApiRtcRoute,
 }

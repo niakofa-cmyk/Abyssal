@@ -1,22 +1,56 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
+import { resolveDatabaseMode } from "../../scripts/db-mode.mjs";
 
-/** Which database backend is active. */
-export type DbSource = "neon" | "pglite";
+/** Which database backend is active. PostgreSQL via `pg`, or embedded PGlite. */
+export type DbSource = "postgres" | "pglite";
 
-// An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
-// "unset" — otherwise production would silently run on the PGLite fallback.
-const rawDatabaseUrl =
-  typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
-const databaseUrl =
-  rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+type ResolvedMode = { source: DbSource; url?: string };
+
+const globalMode = globalThis as typeof globalThis & {
+  __abyssalDbMode__?: ResolvedMode;
+  __abyssalDbModeError__?: Error;
+};
 
 /**
- * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
- * sandbox), otherwise a local embedded **PGLite** (Postgres compiled to WASM) so
- * the app has a working database even with nothing configured — the live preview
- * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
+ * Resolve the backend for this process.
+ *
+ * `npm run build` evaluates server modules while `NODE_ENV` is already
+ * `production` and no database is attached. That evaluation must not fail
+ * closed and must not open PGlite. The built server is started with
+ * `node .output/server/index.mjs`, which does not set `npm_lifecycle_event`
+ * to `build`, so a missing production URL still fails the first readiness check.
  */
-export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+function serverDatabaseMode(): ResolvedMode {
+  if (process.env.npm_lifecycle_event === "build") {
+    const raw = process.env.DATABASE_URL;
+    const url = raw && raw.trim() ? raw.trim() : undefined;
+    return url ? { source: "postgres", url } : { source: "pglite" };
+  }
+  const mode = resolveDatabaseMode(process.env);
+  return mode.source === "postgres"
+    ? { source: "postgres", url: mode.url }
+    : { source: "pglite" };
+}
+
+export function readDbMode(): ResolvedMode {
+  if (typeof window !== "undefined") return { source: "pglite" };
+  if (globalMode.__abyssalDbModeError__) throw globalMode.__abyssalDbModeError__;
+  if (!globalMode.__abyssalDbMode__) {
+    try {
+      globalMode.__abyssalDbMode__ = serverDatabaseMode();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      globalMode.__abyssalDbModeError__ = error;
+      console.error(`[db] ${error.message}`);
+      throw error;
+    }
+  }
+  return globalMode.__abyssalDbMode__;
+}
+
+export function currentDbSource(): DbSource {
+  return readDbMode().source;
+}
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
@@ -85,15 +119,15 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
-function createNeonSql(): Promise<Sql> {
+function createPostgresSql(connectionString: string): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
-    // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
-    // pooled endpoint. One pool per process; warm serverless instances reuse it.
+    // node-postgres. Works with Railway Postgres and Neon's pooled endpoint.
+    // One pool per process; a warm process reuses it.
     const { Pool, types } = await import("pg");
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = new Pool({ connectionString });
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
@@ -176,15 +210,23 @@ async function createSql(): Promise<Sql> {
         "or a server route loader, never from client code.",
     );
   }
-  return dbSource === "neon" ? createNeonSql() : createPgliteSql();
+  const mode = readDbMode();
+  if (mode.source === "postgres") {
+    if (!mode.url) {
+      throw new Error("DATABASE_URL is required in production. PGlite fallback is disabled.");
+    }
+    return createPostgresSql(mode.url);
+  }
+  return createPgliteSql();
 }
 
 /**
- * Get the shared, **server-only** SQL client. Neon when `DATABASE_URL` is set,
- * otherwise the local PGLite fallback. Memoized — safe to call per request.
+ * Get the shared, **server-only** SQL client. PostgreSQL when the mode resolver
+ * selects it, otherwise the local PGlite database. Memoized — safe to call per
+ * request.
  *
  * Schema comes from `migrations/*.sql`, auto-applied before the first query on
- * both backends — define tables there, never inline in server functions.
+ * PGlite. PostgreSQL is migrated by `npm run db:migrate` before the server starts.
  */
 export function getSql(): Promise<Sql> {
   sqlPromise ??= createSql().catch((err) => {
@@ -195,13 +237,12 @@ export function getSql(): Promise<Sql> {
 }
 
 /**
- * The shared PGLite instance (preview only), with `migrations/*.sql` applied.
- * Lets Better Auth persist to the SAME embedded DB as app data in preview (via a
- * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses Neon).
+ * The shared PGLite instance, with `migrations/*.sql` applied.
+ * Throws unless this process explicitly selected the embedded database.
  */
 export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite> {
-  if (dbSource !== "pglite") {
-    throw new Error("getPglite() is only available on the PGLite fallback (no DATABASE_URL)");
+  if (readDbMode().source !== "pglite") {
+    throw new Error("getPglite() is only available when the embedded PGlite database is selected");
   }
   await getSql();
   const pg = await globalRef.__pgliteInstance__;
@@ -210,29 +251,33 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
 }
 
 /**
- * Finish DB bootstrap before the server handles traffic.
+ * Finish DB bootstrap before the server treats itself as ready.
  *
- * - **PGLite** (preview / no `DATABASE_URL`): open the in-memory DB and apply
- *   `migrations/*.sql`. Idempotent — concurrent callers share one promise.
- * - **Neon**: no-op (pool is created lazily on first query).
- *
- * Vite `configureServer` awaits this at dev startup; production imports of this
- * module kick it off immediately (see bottom of file).
+ * - **PGlite**: open the in-memory DB, apply `migrations/*.sql`, then `select 1`.
+ * - **PostgreSQL**: `select 1` on the configured database. Migrations are not
+ *   repeated here; the deploy runs them first.
  */
-export function ensureDbReady(): Promise<void> {
-  if (dbSource !== "pglite") return Promise.resolve();
-  return getSql().then(() => undefined);
+export async function ensureDbReady(): Promise<void> {
+  const sql = await getSql();
+  await sql`select 1 as ok`;
 }
 
-// Server-only eager start: kick PGLite bootstrap as soon as this module loads in
-// Node. Client bundles never hit this path (`getSql` throws in the browser).
+// PGlite migrates itself before the first request. PostgreSQL stays lazy.
+// A missing production URL is remembered and reported by `/api/health` as 503
+// instead of taking the whole server down while it is still starting.
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
-  globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
-    globalBoot.__pgBootstrapPromise__ = undefined;
-    console.error("[db] PGLite bootstrap failed:", err);
-    throw err;
-  });
+if (typeof window === "undefined" && process.env.npm_lifecycle_event !== "build") {
+  try {
+    if (readDbMode().source === "pglite") {
+      globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
+        globalBoot.__pgBootstrapPromise__ = undefined;
+        console.error("[db] PGLite bootstrap failed:", err);
+        throw err;
+      });
+    }
+  } catch {
+    // readDbMode already logged the configuration error.
+  }
 }
