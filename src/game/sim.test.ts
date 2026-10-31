@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { hurtDiver, createSim, findDiver, objective, pressUse, stepSim } from "./sim.ts";
 import { TILE } from "./types.ts";
+import { understanding } from "./understanding.ts";
 import { buildLayout, isSolid } from "./world.ts";
 
 describe("abyssal sim", () => {
@@ -132,5 +133,50 @@ describe("abyssal sim", () => {
     const shutLoss = full - maw.hp;
     assert.ok(openLoss > 20);
     assert.ok(openLoss > shutLoss * 1.5);
+  });
+
+  it("earns understanding from the dive, and does not lock the loft", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    assert.ok(you);
+    assert.equal(understanding(sim, you).id, "catastrophe");
+    assert.match(objective(sim, you), /loft/i);
+
+    const can = sim.pickups.find((pickup) => pickup.id === "o2-a");
+    assert.ok(can);
+    can.taken = true;
+    assert.equal(understanding(sim, you).id, "salvage");
+
+    sim.discovered.push("breach-blackbox");
+    assert.equal(understanding(sim, you).id, "discovery");
+
+    sim.flags.scooterSeen = true;
+    assert.equal(understanding(sim, you).id, "vehicle");
+    assert.equal(you.region, "breach");
+
+    you.region = "plains";
+    assert.equal(understanding(sim, you).id, "encounter");
+    you.region = "breach";
+    sim.explored.plains[0] = 1;
+    assert.equal(understanding(sim, you).id, "encounter");
+
+    sim.flags.mawDead = true;
+    assert.equal(understanding(sim, you).id, "return");
+    assert.equal(understanding(sim, you).index, 5);
+  });
+
+  it("keeps the highest understanding when a later step happens first", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    assert.ok(you);
+    sim.flags.mawDead = true;
+    assert.equal(understanding(sim, you).id, "return");
+
+    const early = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const diver = findDiver(early, "a");
+    assert.ok(diver);
+    early.discovered.push("breach-order");
+    assert.equal(understanding(early, diver).id, "discovery");
+    assert.equal(understanding(early, diver).index > 1, true);
   });
 });

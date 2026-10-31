@@ -2,7 +2,7 @@
 
 Playable descent. The shared ocean is the game. The frequency is an experiment kept beside it.
 
-The design reference is [ABYSSAL-EVALUATION.md](./ABYSSAL-EVALUATION.md). Do not add regions, creatures, or hulls until two divers can share a sector, leave it, and come back.
+The expedition plan is [EXPEDITION.md](./EXPEDITION.md). The design review is [ABYSSAL-EVALUATION.md](./ABYSSAL-EVALUATION.md). Do not add regions, creatures, or hulls until the first expedition is the thing a diver remembers. The journal already names what that dive has come to understand. It does not unlock a door.
 
 ## What the ocean does
 
@@ -23,6 +23,7 @@ The frequency under the console is the old browser-to-browser room. The longer h
 - Pipe eels, ridge hunters, sentries, blooms, and the Lantern Maw.
 - Breach, plains, city, works, and reef. Trench, upper ocean, and surface stay sealed.
 - The picture stays 512×288. A is left. D is right.
+- The journal tracks six levels of understanding, from the blackout to the shelf door. They are derived from air taken, breach recordings, the scooter, the plains, and whether the Maw is still alive.
 
 ## Honest limit
 

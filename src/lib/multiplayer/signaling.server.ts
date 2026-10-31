@@ -1,7 +1,9 @@
 /**
- * WebRTC signaling over the app database (Neon deployed, PGLite in preview).
+ * WebRTC signaling over the app database.
  * Only rendezvous traffic passes through here — roster + SDP/ICE relay while a
  * mesh forms; game data then flows peer-to-peer.
+ *
+ * Tables live in `migrations/0003_webrtc_signal.sql`. Do not create them here.
  */
 import { z } from "zod";
 import { getSql, type Sql } from "@/lib/db";
@@ -23,43 +25,6 @@ const postSchema = z.discriminatedUnion("op", [signalSchema, leaveSchema]);
 
 const PEER_TTL_SECONDS = 30;
 const SIGNAL_TTL_SECONDS = 60;
-
-const globalRef = globalThis as typeof globalThis & {
-  __rtcSchemaPromise__?: Promise<void>;
-};
-
-function ensureSchema(sql: Sql): Promise<void> {
-  globalRef.__rtcSchemaPromise__ ??= (async () => {
-    await sql.query(
-      `CREATE TABLE IF NOT EXISTS webrtc_peers (
-         room TEXT NOT NULL,
-         peer_id TEXT NOT NULL,
-         name TEXT NOT NULL DEFAULT '',
-         last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
-         PRIMARY KEY (room, peer_id)
-       )`,
-    );
-    await sql.query(
-      `CREATE TABLE IF NOT EXISTS webrtc_signals (
-         id BIGSERIAL PRIMARY KEY,
-         room TEXT NOT NULL,
-         to_peer TEXT NOT NULL,
-         from_peer TEXT NOT NULL,
-         kind TEXT NOT NULL,
-         payload JSONB NOT NULL,
-         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-       )`,
-    );
-    await sql.query(
-      `CREATE INDEX IF NOT EXISTS webrtc_signals_inbox
-         ON webrtc_signals (room, to_peer, id)`,
-    );
-  })().catch((err) => {
-    globalRef.__rtcSchemaPromise__ = undefined;
-    throw err;
-  });
-  return globalRef.__rtcSchemaPromise__;
-}
 
 async function roster(sql: Sql, room: string): Promise<PeerRow[]> {
   const rows = await sql.query<{ peer_id: string; name: string }>(
@@ -117,7 +82,6 @@ async function handleGet(url: URL): Promise<Response> {
   const { room, peer, name, since } = parsed.data;
 
   const sql = await getSql();
-  await ensureSchema(sql);
   if (since === 0 || Math.random() < 0.02) await prune(sql);
   await touchPeer(sql, room, peer, name);
   const rows = await sql.query<{
@@ -154,7 +118,6 @@ async function handlePost(request: Request): Promise<Response> {
   if (!parsed.success) return json({ error: "invalid request" }, 400);
   const msg = parsed.data;
   const sql = await getSql();
-  await ensureSchema(sql);
 
   if (msg.op === "signal") {
     await sql.query(

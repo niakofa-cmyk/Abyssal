@@ -36,6 +36,7 @@ import {
   hullStage,
 } from "@/game/sim";
 import { VIEW_H, VIEW_W, ZONES, TILE, type Diver, type RegionId, type Seat, type Sim } from "@/game/types";
+import { understanding, UNDERSTANDING } from "@/game/understanding";
 
 type Overlay = "none" | "map" | "journal" | "pause" | "dead";
 
@@ -84,6 +85,7 @@ type Hud = {
   region: string;
   depth: string;
   objective: string;
+  understanding: string;
   seat: string;
   hull: number;
   energy: number;
@@ -381,6 +383,7 @@ function readHud(session: Session): Hud {
     you && you.region === "plains" ? session.sim.creatures.find((c) => c.kind === "maw" && c.region === "plains") : undefined;
   const ai = session.sim.divers.find((d) => d.kind === "ai");
   const depth = you ? Math.round(region.depth + (you.y / (region.h * 32)) * 36) : region.depth;
+  const grasp = understanding(session.sim, you);
   return {
     name: you?.name ?? "",
     hp: you?.hp ?? 0,
@@ -390,6 +393,7 @@ function readHud(session: Session): Hud {
     region: region.name,
     depth: `${depth} m`,
     objective: objective(session.sim, you),
+    understanding: grasp.title,
     seat: you?.seat
       ? `${vehicle?.kind === "barrow" ? "Barrow" : vehicle?.kind === "kite" ? "Kite" : "Scooter"} · ${you.seat}`
       : "Swimming",
@@ -1017,7 +1021,8 @@ export function GameApp() {
               </div>
             ) : null}
             {hud.toasts[0] ? <p className="bg-deep/75 px-3 py-2 text-sm text-foam">{hud.toasts[0]}</p> : null}
-            <p className="mt-2 text-xs text-mist">{hud.objective}</p>
+            <p className="mt-2 text-[10px] tracking-[0.18em] text-amber uppercase">{hud.understanding}</p>
+            <p className="mt-1 text-xs text-mist">{hud.objective}</p>
             {hud.soren ? <p className="text-[10px] tracking-[0.14em] text-amber uppercase">{hud.soren}</p> : null}
           </div>
         </div>
@@ -1081,6 +1086,7 @@ export function GameApp() {
                   <li>Arrows and L are Imani, if she launched with you. V holds Soren in this sector.</li>
                   <li>Tab cycles seats. The helm steers. The tube fires. The pumps brace. The sea keeps the booking.</li>
                   <li>If your signal drops, the seat opens. Coming back puts you where you left the water.</li>
+                  <li>The journal keeps what this expedition has come to understand. It does not unlock a door.</li>
                 </ul>
                 <div className="mt-5 flex gap-3">
                   <button type="button" className="h-11 bg-biolume px-4 text-deep" onClick={() => {
@@ -1108,7 +1114,9 @@ export function GameApp() {
                 <Chart sim={sessionRef.current?.sim} selfId={sessionRef.current?.selfId ?? ""} />
               </div>
             ) : null}
-            {overlay === "journal" ? <Journal sim={sessionRef.current?.sim} /> : null}
+            {overlay === "journal" ? (
+              <Journal sim={sessionRef.current?.sim} selfId={sessionRef.current?.selfId ?? ""} />
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -1358,7 +1366,8 @@ function Chart({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
         {sim.divers
           .filter((diver) => diver.alive && diver.id !== selfId)
           .map((diver) => ` ${diver.name} is in ${sim.regions[diver.region].name}.`)
-          .join("")}
+          .join("")}{" "}
+        {understanding(sim, you).title}. {understanding(sim, you).next}
       </p>
       <ul className="mt-3 space-y-1 text-sm">
         {ZONES.map((zone) => (
@@ -1374,14 +1383,29 @@ function Chart({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
   );
 }
 
-function Journal({ sim }: { sim: Sim | undefined }) {
+function Journal({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
   if (!sim) return null;
+  const you = findDiver(sim, selfId);
+  const grasp = understanding(sim, you);
   const logs = sim.discovered.filter((id) => LOGS[id]);
   const beasts = sim.discovered.filter((id) => id.startsWith("beast:"));
   return (
     <div>
       <h2 className="font-display text-3xl">Journal</h2>
-      {logs.length === 0 ? <p className="mt-3 text-sm text-mist">Nothing written down yet. Swim into the glowing desks.</p> : null}
+      <p className="mt-2 text-[10px] tracking-[0.18em] text-amber uppercase">
+        Understanding · {grasp.index + 1} of {UNDERSTANDING.length}
+      </p>
+      <h3 className="mt-1 font-display text-2xl text-foam">{grasp.title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-mist">{grasp.known}</p>
+      <p className="mt-2 text-sm text-foam">{grasp.next}</p>
+      <ol className="mt-4 space-y-1 text-sm">
+        {UNDERSTANDING.map((step, index) => (
+          <li key={step.id} className={index <= grasp.index ? "text-foam" : "text-mist"}>
+            {index <= grasp.index ? step.title : "Still dark"}
+          </li>
+        ))}
+      </ol>
+      {logs.length === 0 ? <p className="mt-4 text-sm text-mist">Nothing written down yet. Swim into the glowing desks.</p> : null}
       <div className="mt-3 space-y-4">
         {logs.map((id) => (
           <article key={id}>

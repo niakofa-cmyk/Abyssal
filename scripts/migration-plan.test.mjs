@@ -60,6 +60,7 @@ test("the auth schema ships outside the globbed directory", () => {
   const migrationsDir = join(projectRoot(), "migrations");
   const pending = pendingMigrations(readdirSync(migrationsDir), []);
   assert.ok(pending.some((migration) => migration.name === "0002_abyssal_ocean.sql"));
+  assert.ok(pending.some((migration) => migration.name === "0003_webrtc_signal.sql"));
   assert.ok(!pending.some((migration) => migration.name === "0001_auth.sql"));
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });
