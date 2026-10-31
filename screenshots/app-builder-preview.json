@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Abyssal: The Last Ascent",
+      "hasCanvas": false,
+      "bodyTextLen": 698,
+      "bodyTextHash": "a18ef8870fbe0f92e1112d2d2f94ec4861184f386b24fe05c614d09175e026b0",
+      "bodyTextPrefix": "DESCENT 01 · SHARED DEPTH Abyssal The Last Ascent You come to un",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Abyssal: The Last Ascent",
+      "hasCanvas": false,
+      "bodyTextLen": 698,
+      "bodyTextHash": "a18ef8870fbe0f92e1112d2d2f94ec4861184f386b24fe05c614d09175e026b0",
+      "bodyTextPrefix": "DESCENT 01 · SHARED DEPTH Abyssal The Last Ascent You come to un",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
