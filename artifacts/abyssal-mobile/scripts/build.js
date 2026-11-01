@@ -57,6 +57,14 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
+  if (process.env.EXPO_PUBLIC_DOMAIN) {
+    return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
+  }
+
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    return stripProtocol(process.env.RAILWAY_PUBLIC_DOMAIN);
+  }
+
   if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
     return stripProtocol(process.env.REPLIT_INTERNAL_APP_DOMAIN);
   }
@@ -65,14 +73,26 @@ function getDeploymentDomain() {
     return stripProtocol(process.env.REPLIT_DEV_DOMAIN);
   }
 
-  if (process.env.EXPO_PUBLIC_DOMAIN) {
-    return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
+  if (process.env.EXPO_PUBLIC_API_ORIGIN) {
+    return stripProtocol(process.env.EXPO_PUBLIC_API_ORIGIN);
   }
 
   console.error(
-    'ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN',
+    'ERROR: No deployment domain found. Set EXPO_PUBLIC_DOMAIN, RAILWAY_PUBLIC_DOMAIN, REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_API_ORIGIN',
   );
   process.exit(1);
+}
+
+function getApiOrigin(deploymentDomain) {
+  const configured = process.env.EXPO_PUBLIC_API_ORIGIN?.trim();
+  if (!configured) return `https://${deploymentDomain}`;
+
+  const normalized = /^https?:\/\//i.test(configured) ? configured : `https://${configured}`;
+  const url = new URL(normalized);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('EXPO_PUBLIC_API_ORIGIN must use http or https.');
+  }
+  return url.origin;
 }
 
 function prepareDirectories(timestamp) {
@@ -129,7 +149,7 @@ function getExpoPublicReplId() {
   return process.env.REPL_ID || process.env.EXPO_PUBLIC_REPL_ID;
 }
 
-async function startMetro(expoPublicDomain, expoPublicReplId) {
+async function startMetro(expoPublicDomain, expoPublicApiOrigin, expoPublicReplId) {
   const isRunning = await checkMetroHealth();
   if (isRunning) {
     console.log('Metro already running');
@@ -141,6 +161,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   const env = {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
+    EXPO_PUBLIC_API_ORIGIN: expoPublicApiOrigin,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
   };
 
@@ -527,6 +548,7 @@ async function main() {
   setupSignalHandlers();
 
   const domain = getDeploymentDomain();
+  const apiOrigin = getApiOrigin(domain);
   const expoPublicReplId = getExpoPublicReplId();
   const baseUrl = `https://${domain}`;
   const timestamp = `${Date.now()}-${process.pid}`;
@@ -534,7 +556,7 @@ async function main() {
   prepareDirectories(timestamp);
   clearMetroCache();
 
-  await startMetro(domain, expoPublicReplId);
+  await startMetro(domain, apiOrigin, expoPublicReplId);
 
   const downloadTimeout = 600000;
   const downloadPromise = downloadBundlesAndManifests(timestamp);

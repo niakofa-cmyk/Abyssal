@@ -58,6 +58,14 @@ function haptic() {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
 }
 
+function connectionErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : '';
+  if (/failed to fetch|network request failed|network error/i.test(message)) {
+    return 'The ocean server could not be reached. Check the connection and try again.';
+  }
+  return message || fallback;
+}
+
 function regionInfo(id: string) {
   return REGIONS.find((region) => region.id === id) ?? REGIONS[0];
 }
@@ -128,7 +136,7 @@ export default function HomeScreen() {
         backoffMs = 300;
         nextAllowedAt = 0;
       } catch (error) {
-        if (active) setApiError(error instanceof Error ? error.message : 'Signal lost. Retrying.');
+        if (active) setApiError(connectionErrorMessage(error, 'Signal lost. Retrying.'));
         nextAllowedAt = Date.now() + backoffMs;
         backoffMs = Math.min(backoffMs * 2, 8000);
       } finally {
@@ -169,7 +177,7 @@ export default function HomeScreen() {
       setView('dive');
       haptic();
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : 'The signal could not be established.');
+      setLocalError(connectionErrorMessage(error, 'The signal could not be established.'));
     } finally {
       setBusy(false);
     }

@@ -16,11 +16,11 @@ test("the production build does not migrate and does not need a live database", 
 });
 
 test("Railway runs the Node server, migrates before start, and checks /api/health", () => {
-  const railway = read("railway.toml");
+  const railway = read("../../railway.toml");
   assert.match(railway, /builder = "RAILPACK"/);
-  assert.match(railway, /buildCommand = "npm run build"/);
-  assert.match(railway, /preDeployCommand = \["npm run db:migrate"\]/);
-  assert.match(railway, /startCommand = "node \.output\/server\/index\.mjs"/);
+  assert.match(railway, /buildCommand = "pnpm --filter @workspace\/abyssal run build"/);
+  assert.match(railway, /preDeployCommand = \["pnpm --filter @workspace\/abyssal run db:migrate"\]/);
+  assert.match(railway, /startCommand = "pnpm --filter @workspace\/abyssal run start"/);
   assert.match(railway, /healthcheckPath = "\/api\/health"/);
   assert.match(railway, /restartPolicyType = "ON_FAILURE"/);
   assert.doesNotMatch(railway, /vercel/i);

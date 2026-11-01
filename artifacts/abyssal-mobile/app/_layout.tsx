@@ -14,8 +14,13 @@ import { setBaseUrl } from '@workspace/api-client-react';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-if (process.env.EXPO_PUBLIC_DOMAIN) {
-  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+const configuredApiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN?.trim();
+const configuredApiDomain = process.env.EXPO_PUBLIC_DOMAIN?.trim();
+
+if (configuredApiOrigin) {
+  setBaseUrl(configuredApiOrigin);
+} else if (configuredApiDomain) {
+  setBaseUrl(`https://${configuredApiDomain}`);
 }
 
 const queryClient = new QueryClient();
