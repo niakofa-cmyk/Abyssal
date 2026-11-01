@@ -15,15 +15,11 @@ test("the production build does not migrate and does not need a live database", 
   assert.equal(pkg.scripts.start, "node .output/server/index.mjs");
 });
 
-test("Railway runs the Node server, migrates before start, and checks /api/health", () => {
-  const railway = read("../../railway.toml");
-  assert.match(railway, /builder = "RAILPACK"/);
-  assert.match(railway, /buildCommand = "pnpm --filter @workspace\/abyssal run build"/);
-  assert.match(railway, /preDeployCommand = \["pnpm --filter @workspace\/abyssal run db:migrate"\]/);
-  assert.match(railway, /startCommand = "pnpm --filter @workspace\/abyssal run start"/);
-  assert.match(railway, /healthcheckPath = "\/api\/health"/);
-  assert.match(railway, /restartPolicyType = "ON_FAILURE"/);
-  assert.doesNotMatch(railway, /vercel/i);
+test("the workspace pins pnpm to the lockfile-compatible version", () => {
+  const workspace = JSON.parse(read("../../package.json"));
+  const lockfile = read("../../pnpm-lock.yaml");
+  assert.equal(workspace.packageManager, "pnpm@10.26.1");
+  assert.match(lockfile, /lockfileVersion: '9\.0'/);
 });
 
 test("build and preview share the Node server preset", () => {
