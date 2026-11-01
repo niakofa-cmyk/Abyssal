@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { projectRoot } from "./with-app-env.mjs";
@@ -20,6 +20,10 @@ test("the workspace pins pnpm to the lockfile-compatible version", () => {
   const lockfile = read("../../pnpm-lock.yaml");
   assert.equal(workspace.packageManager, "pnpm@10.26.1");
   assert.match(lockfile, /lockfileVersion: '9\.0'/);
+});
+
+test("a scaffold HTML renderer cannot override the TanStack server routes", () => {
+  assert.equal(existsSync(join(root, "index.html")), false);
 });
 
 test("build and preview share the Node server preset", () => {

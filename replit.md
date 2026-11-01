@@ -1,6 +1,18 @@
-# [Project name]
+# Abyssal: The Last Ascent
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A cooperative underwater survival and exploration game with a shared ocean and beacon-based diver identity.
+
+## Railway production
+
+- Production: https://abyssal-web-production.up.railway.app
+- Railway project: `Abyssal`; environment: `production`; services: `abyssal-web` and `Postgres`.
+- Source: `niakofa-cmyk/Abyssal`, branch `main`, repository root.
+- Service settings are managed directly in Railway, not through deprecated `railway.toml` configuration.
+- Build: `pnpm --filter @workspace/abyssal run build`
+- Pre-deploy: `pnpm --filter @workspace/abyssal run db:migrate`
+- Start: `pnpm --filter @workspace/abyssal run start`
+- Readiness: `/api/health` must return JSON with `ok: true`, `ready: true`, and `db: "postgres"`. HTTP 200 alone is insufficient.
+- `DATABASE_URL` references the project's Postgres service. Account authentication remains disabled; the game uses its existing beacon identity.
 
 ## Run & Operate
 
