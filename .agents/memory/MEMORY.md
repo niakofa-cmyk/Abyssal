@@ -1,0 +1,1 @@
+- [API service path ownership](api-service-path-ownership.md) — check for the scaffold API service shadowing application-owned `/api/*` routes.

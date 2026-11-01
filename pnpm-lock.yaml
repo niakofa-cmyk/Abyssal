@@ -308,6 +308,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.9
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
       '@types/react':
         specifier: 'catalog:'
         version: 19.3.0
