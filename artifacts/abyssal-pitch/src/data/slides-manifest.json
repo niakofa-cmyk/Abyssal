@@ -1,0 +1,82 @@
+[
+  {
+    "id": "7ff6beeb-05dc-4728-b3ca-2cd60b293d59",
+    "position": 1,
+    "filepath": "src/pages/slides/Slide01.tsx",
+    "title": "THE DESCENT BEGINS",
+    "description": "A cooperative descent through an ocean that remembers.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "c236f798-0437-4ac5-bad5-2057b6ddbead",
+    "position": 2,
+    "filepath": "src/pages/slides/Slide02.tsx",
+    "title": "THE OCEAN DOESN'T END AT THE EDGE OF YOUR SCREEN",
+    "description": "A world that exists beyond your immediate surroundings.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "eab94be8-79d8-46e3-b3ea-9b44bd373ee5",
+    "position": 3,
+    "filepath": "src/pages/slides/Slide03.tsx",
+    "title": "THE CATASTROPHE IS ONLY THE BEGINNING",
+    "description": "You survived. You still don't know why.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "4ad9bb2a-edaa-46e9-b661-a51c75fdac65",
+    "position": 4,
+    "filepath": "src/pages/slides/Slide04.tsx",
+    "title": "FIVE REGIONS. ONE DESCENT INTO THE UNKNOWN.",
+    "description": "Every region reveals another part of the world.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "05c4eb2b-b1e0-4997-bff8-a558daf6beff",
+    "position": 5,
+    "filepath": "src/pages/slides/Slide05.tsx",
+    "title": "DISCOVER THE TRUTH. DON'T JUST READ IT.",
+    "description": "The ocean is an archaeological mystery.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "ff68ae1e-e199-42ad-850d-be622267824c",
+    "position": 6,
+    "filepath": "src/pages/slides/Slide06.tsx",
+    "title": "SURVIVE TOGETHER. EVERY ROLE MATTERS.",
+    "description": "The right crew can make the difference between discovery and disaster.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "7540e94e-34c8-48cc-b3c9-c4cb38390975",
+    "position": 7,
+    "filepath": "src/pages/slides/Slide07.tsx",
+    "title": "THE OCEAN IS ALIVE. THE MAW IS NOT JUST A BOSS.",
+    "description": "Something lives in the darkness.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "98d256e1-85f9-4833-98f0-fa7d35654829",
+    "position": 8,
+    "filepath": "src/pages/slides/Slide08.tsx",
+    "title": "A DIVE THAT CAN CONTINUE",
+    "description": "Persistence is part of the experience.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "1843b52a-0bba-42c0-8362-44a6ab1de894",
+    "position": 9,
+    "filepath": "src/pages/slides/Slide09.tsx",
+    "title": "THE BIGGER MYSTERY IS STILL ABOVE YOU",
+    "description": "The deepest discovery may not be at the bottom.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "085f2ab5-3626-4dc6-b64b-f9c32ff04085",
+    "position": 10,
+    "filepath": "src/pages/slides/Slide10.tsx",
+    "title": "DESCEND TOGETHER. FIND WHAT HAPPENED.",
+    "description": "The wreck still holds records, and they do not agree.",
+    "speakerNotes": ""
+  }
+]

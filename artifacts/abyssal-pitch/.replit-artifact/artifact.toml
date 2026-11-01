@@ -1,0 +1,28 @@
+kind = "slides"
+previewPath = "/abyssal-pitch/"
+title = "Abyssal: The Last Ascent — Pitch Deck"
+description = "A 10-slide cinematic game pitch deck for Abyssal: The Last Ascent, using the confirmed slide copy and current in-game art while distinguishing implemented systems from future campaign ambitions."
+version = "1.0.0"
+id = "artifacts/abyssal-pitch"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/abyssal-pitch/" ]
+localPort = 20341
+
+[services.development]
+run = "pnpm --filter @workspace/abyssal-pitch run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/abyssal-pitch", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/abyssal-pitch/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20341"
+BASE_PATH = "/abyssal-pitch/"

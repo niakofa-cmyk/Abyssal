@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: ocean
+    description: Persistent Abyssal world operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /ocean:
+    get:
+      operationId: getOceanRoster
+      tags: [ocean]
+      summary: Read the live sector roster
+      description: Returns the current sectors, their occupancy, and shared world flags.
+      responses:
+        "200":
+          description: Current ocean roster
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OceanReply"
+    post:
+      operationId: oceanAction
+      tags: [ocean]
+      summary: Read or join the shared ocean
+      description: Reads the live sector roster, joins or resumes a persistent dive, or synchronizes diver input.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/OceanRosterRequest"
+                - $ref: "#/components/schemas/OceanJoinRequest"
+                - $ref: "#/components/schemas/OceanSyncRequest"
+      responses:
+        "200":
+          description: Ocean state or sector roster
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OceanReply"
+        "400":
+          description: Invalid action or unavailable ocean state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +75,260 @@ components:
           type: string
       required:
         - status
+    ApiError:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+      required: [ok, error]
+    OceanRosterRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          const: roster
+      required: [action]
+    OceanJoinRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          const: join
+        token:
+          oneOf:
+            - type: string
+            - type: "null"
+        callsign:
+          type: string
+          maxLength: 18
+      required: [action]
+    OceanIntent:
+      type: object
+      properties:
+        ax:
+          type: number
+          minimum: -1
+          maximum: 1
+        ay:
+          type: number
+          minimum: -1
+          maximum: 1
+        aimX:
+          type: number
+        aimY:
+          type: number
+        fire:
+          type: boolean
+        use:
+          type: boolean
+        repair:
+          type: boolean
+        cycle:
+          type: boolean
+      required: [ax, ay, aimX, aimY, fire]
+    OceanSyncRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          const: sync
+        token:
+          type: string
+        input:
+          $ref: "#/components/schemas/OceanIntent"
+      required: [action, token, input]
+    SectorReport:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        depth:
+          type: string
+        state:
+          type: string
+          enum: [live, sleep, sealed]
+        divers:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+            required: [name]
+        boss:
+          type: object
+          properties:
+            name:
+              type: string
+            hp:
+              type: number
+            hpMax:
+              type: number
+            alive:
+              type: boolean
+            phase:
+              type: string
+        hulls:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              riders:
+                type: integer
+              destroyed:
+                type: boolean
+      required: [id, name, depth, state, divers]
+    DiverView:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        region:
+          type: string
+          enum: [breach, plains, city, works, reef]
+        x:
+          type: number
+        y:
+          type: number
+        facing:
+          type: integer
+          enum: [-1, 1]
+        aimX:
+          type: number
+        aimY:
+          type: number
+        hp:
+          type: number
+        o2:
+          type: number
+        ammo:
+          type: number
+        cells:
+          type: number
+        alive:
+          type: boolean
+        vehicleId:
+          oneOf:
+            - type: string
+            - type: "null"
+        seat:
+          oneOf:
+            - type: string
+            - type: "null"
+      required: [id, name, region, x, y, facing, aimX, aimY, hp, o2, ammo, cells, alive]
+    OceanSnapshot:
+      type: object
+      properties:
+        time:
+          type: number
+        you:
+          $ref: "#/components/schemas/DiverView"
+        roster:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectorReport"
+        divers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiverView"
+        creatures:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              region:
+                type: string
+                enum: [breach, plains, city, works, reef]
+              x:
+                type: number
+              y:
+                type: number
+              hp:
+                type: number
+              hpMax:
+                type: number
+              alive:
+                type: boolean
+              state:
+                type: string
+              aggro:
+                type: boolean
+            required: [id, region, x, y, alive]
+        vehicles:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              region:
+                type: string
+                enum: [breach, plains, city, works, reef]
+              x:
+                type: number
+              y:
+                type: number
+              hull:
+                type: number
+              hullMax:
+                type: number
+              energy:
+                type: number
+              energyMax:
+                type: number
+              destroyed:
+                type: boolean
+              kind:
+                type: string
+              seats:
+                type: object
+                additionalProperties:
+                  type:
+                    - string
+                    - "null"
+            required: [id, region, x, y, hull, destroyed, kind]
+        events:
+          type: array
+          items:
+            type: string
+        toasts:
+          type: array
+          items:
+            type: string
+        seen:
+          type: array
+          items:
+            type: string
+        found:
+          type: array
+          items:
+            type: string
+      required: [time, you, roster]
+      additionalProperties: true
+    OceanReply:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        token:
+          type: string
+        snap:
+          $ref: "#/components/schemas/OceanSnapshot"
+        roster:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectorReport"
+        error:
+          type: string
+      required: [ok]
 

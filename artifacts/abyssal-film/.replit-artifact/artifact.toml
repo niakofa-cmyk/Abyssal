@@ -1,0 +1,29 @@
+kind = "video"
+videoAspectRatio = "16:9"
+previewPath = "/abyssal-film/"
+title = "Abyssal: The Last Ascent — Promo Film"
+description = "An animated promotional film for Abyssal: The Last Ascent, using the game’s existing assets and identity."
+version = "1.0.0"
+id = "artifacts/abyssal-film"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/abyssal-film/" ]
+localPort = 22439
+
+[services.development]
+run = "pnpm --filter @workspace/abyssal-film run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/abyssal-film", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/abyssal-film/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22439"
+BASE_PATH = "/abyssal-film/"
