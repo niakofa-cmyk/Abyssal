@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Anchor, BookOpen, Map, Radio, Volume2, VolumeX } from "lucide-react";
+import { Anchor, ArrowLeft, BookOpen, Map, Radio, Volume2, VolumeX } from "lucide-react";
 import { StageMap } from "@/components/abyssal/StageMap";
 import { BESTIARY } from "@/game/content";
 import { archiveOf, KIND_LABEL, mawStages } from "@/game/archive";
@@ -268,7 +268,7 @@ function installProbe(session: Session) {
 function applyInput(session: Session) {
   const you = findDiver(session.sim, session.selfId);
   if (!you) return;
-  if (edge(session, "Escape")) session.overlay = session.overlay === "pause" ? "none" : "pause";
+  if (edge(session, "Escape")) session.overlay = session.overlay === "none" ? "pause" : "none";
   if (edge(session, "KeyM")) session.overlay = session.overlay === "map" ? "none" : "map";
   if (edge(session, "KeyJ")) session.overlay = session.overlay === "journal" ? "none" : "journal";
   if (session.overlay === "pause" || session.overlay === "map" || session.overlay === "journal") {
@@ -470,6 +470,17 @@ export function GameApp() {
   const visionOn = useRef(false);
   const [vision, setVision] = useState(false);
 
+  function resumeGame() {
+    const session = sessionRef.current;
+    if (!session) return;
+    session.overlay = "none";
+    session.keys.clear();
+    session.prev.clear();
+    session.touch = { ax: 0, ay: 0, fire: false, use: false };
+    setOverlay("none");
+    canvasRef.current?.focus({ preventScroll: true });
+  }
+
   useEffect(() => {
     setProfile(loadProfile());
     setResumeOk(hasSave());
@@ -515,6 +526,17 @@ export function GameApp() {
     const down = (event: KeyboardEvent) => {
       const session = sessionRef.current;
       if (!session || session.mode !== "play") return;
+      if (event.code === "Escape" && event.repeat) return;
+      if (event.code === "Escape" && session.overlay !== "none" && session.overlay !== "dead") {
+        event.preventDefault();
+        resumeGame();
+        return;
+      }
+      // Let panel buttons retain normal Enter, Space, and Tab behavior.
+      if (event.target instanceof HTMLElement) {
+        if (event.target.closest("input, textarea, select")) return;
+        if (event.target.closest("button, a, summary") && ["Enter", "Space", "Tab"].includes(event.code)) return;
+      }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Tab"].includes(event.code)) {
         event.preventDefault();
       }
@@ -996,6 +1018,8 @@ export function GameApp() {
       <div className="absolute inset-0 grid place-items-center [container-type:size]">
         <canvas
           ref={canvasRef}
+          tabIndex={-1}
+          aria-label="Ocean gameplay"
           width={VIEW_W}
           height={VIEW_H}
           className="bg-deep"
@@ -1118,8 +1142,43 @@ export function GameApp() {
       ) : null}
 
       {overlay !== "none" && overlay !== "dead" ? (
-        <section className="absolute inset-0 grid place-items-center bg-deep/72 p-4">
-          <div className="max-h-[86%] w-full max-w-3xl overflow-auto border border-line bg-abyss p-5">
+        <section
+          className="absolute inset-0 grid place-items-center bg-deep/72 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={overlay === "map" ? "Expedition map" : overlay === "journal" ? "Archive" : "Dive controls"}
+          onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+            );
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }}
+        >
+          <div className="flex max-h-[86%] w-full max-w-3xl flex-col overflow-hidden border border-line bg-abyss">
+            <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+              <p className="text-xs tracking-[0.16em] text-mist uppercase">
+                {overlay === "map" ? "Expedition map" : overlay === "journal" ? "Archive" : "Dive controls"}
+              </p>
+              <button
+                type="button"
+                autoFocus
+                className="flex min-h-11 items-center gap-2 bg-biolume px-4 text-sm font-medium text-deep"
+                onClick={resumeGame}
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                Resume game
+              </button>
+            </header>
+            <div className="min-h-0 overflow-y-auto p-5">
             {overlay === "pause" ? (
               <>
                 <h2 className="font-display text-3xl">Holding breath</h2>
@@ -1133,12 +1192,6 @@ export function GameApp() {
                   <li>The journal keeps what this expedition has come to understand. Records can disagree until the pieces meet. It does not unlock a door.</li>
                 </ul>
                 <div className="mt-5 flex gap-3">
-                  <button type="button" className="h-11 bg-biolume px-4 text-deep" onClick={() => {
-                    if (sessionRef.current) sessionRef.current.overlay = "none";
-                    setOverlay("none");
-                  }}>
-                    Continue
-                  </button>
                   <button type="button" className="h-11 border border-line px-4" onClick={leave}>
                     Surface to menu
                   </button>
@@ -1161,6 +1214,7 @@ export function GameApp() {
             {overlay === "journal" ? (
               <Journal sim={sessionRef.current?.sim} selfId={sessionRef.current?.selfId ?? ""} />
             ) : null}
+            </div>
           </div>
         </section>
       ) : null}
