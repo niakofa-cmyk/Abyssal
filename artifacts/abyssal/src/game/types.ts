@@ -1,3 +1,5 @@
+import type { Ecology } from "./ecology.ts";
+
 export const TILE = 32;
 export const VIEW_W = 512;
 export const VIEW_H = 288;
@@ -177,6 +179,7 @@ export type Sim = {
   discovered: string[];
   /** Records any diver in this ocean has recovered. Empty outside the shared sea. */
   shared: string[];
+  ecology: Ecology;
   explored: Record<RegionId, number[]>;
   flags: {
     mawDead: boolean;
@@ -200,6 +203,7 @@ export type OutMsg =
 
 export type WorldSnap = {
   t: number;
+  ecology?: Ecology;
   flags: Sim["flags"];
   taken: string[];
   creatures: Array<

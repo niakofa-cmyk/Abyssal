@@ -125,6 +125,48 @@ export interface DiverView {
   seat?: string | null;
 }
 
+export interface EcologyPoint {
+  x: number;
+  y: number;
+}
+
+export type EcologyEventKind = typeof EcologyEventKind[keyof typeof EcologyEventKind];
+
+
+export const EcologyEventKind = {
+  power: 'power',
+  disturbance: 'disturbance',
+  bloom: 'bloom',
+  signal: 'signal',
+} as const;
+
+export interface EcologyEvent {
+  kind: EcologyEventKind;
+  /** Occupied-sector simulation time in seconds, not wall-clock time. */
+  at: number;
+}
+
+export interface RegionEcology {
+  powered: boolean;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  bloom: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  noise: number;
+  disturbance: number;
+  activeSeconds: number;
+  poweredSeconds: number;
+  source: EcologyPoint | null;
+  station: EcologyPoint | null;
+  /** @maxItems 8 */
+  events: EcologyEvent[];
+}
+
 export type OceanSnapshotCreaturesItemRegion = typeof OceanSnapshotCreaturesItemRegion[keyof typeof OceanSnapshotCreaturesItemRegion];
 
 
@@ -176,6 +218,7 @@ export type OceanSnapshotVehiclesItem = {
 };
 
 export interface OceanSnapshot {
+  ecology?: RegionEcology;
   time: number;
   you: DiverView;
   roster: SectorReport[];

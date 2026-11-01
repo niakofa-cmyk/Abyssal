@@ -9,6 +9,7 @@ import {
 } from "./sim.ts";
 import { TILE, ZONES, type Facing, type Projectile, type RegionId, type Seat, type Sim, type Vehicle } from "./types.ts";
 import { casesClosedBy } from "./archive.ts";
+import { ECOLOGY_EVENTS, reviveEcology, type RegionEcology } from "./ecology.ts";
 
 export const REGIONS: RegionId[] = ["breach", "plains", "city", "works", "reef"];
 
@@ -54,6 +55,7 @@ export type DiverView = {
 };
 
 export type OceanSnap = {
+  ecology?: RegionEcology;
   time: number;
   flags: Sim["flags"];
   you: DiverView;
@@ -148,7 +150,7 @@ export type OceanBody = {
   flags: Sim["flags"];
   sectors: Record<
     RegionId,
-    { time: number; creatures: CreatureSave[]; vehicles: VehicleSave[]; taken: string[]; projectiles: OceanSnap["projectiles"] }
+    { time: number; ecology?: RegionEcology; creatures: CreatureSave[]; vehicles: VehicleSave[]; taken: string[]; projectiles: OceanSnap["projectiles"] }
   >;
   divers: DiverSave[];
   found?: string[];
@@ -346,7 +348,11 @@ export class Ocean {
     for (const id of occupied) {
       const sim = this.sectors[id];
       sim.flags = { ...this.flags };
+      const previousEcologyEvents = sim.ecology[id].events.length;
       stepSim(sim, dt, true, "*");
+      for (const event of sim.ecology[id].events.slice(previousEcologyEvents)) {
+        for (const diver of sim.divers) this.toast(diver.id, ECOLOGY_EVENTS[event.kind]);
+      }
       this.pullFlags(sim);
       for (const event of sim.events) {
         for (const diver of sim.divers) {
@@ -373,6 +379,7 @@ export class Ocean {
     const events = player.pending.splice(0, player.pending.length);
     return {
       time: sim.time,
+      ecology: reviveEcology(sim.ecology[diver.region]),
       flags: { ...this.flags },
       you: viewDiver(diver),
       divers: sim.divers.map(viewDiver),
@@ -465,6 +472,7 @@ export class Ocean {
       const sim = this.sectors[id];
       sectors[id] = {
         time: sim.time,
+        ecology: reviveEcology(sim.ecology[id]),
         creatures: sim.creatures.map((c) => ({
           id: c.id,
           region: c.region,
@@ -559,6 +567,7 @@ export class Ocean {
       const sim = ocean.sectors[id];
       if (!saved) continue;
       sim.time = saved.time || 0;
+      sim.ecology[id] = reviveEcology(saved.ecology);
       for (const c of saved.creatures ?? []) {
         const local = sim.creatures.find((item) => item.id === c.id);
         if (!local) continue;
@@ -784,7 +793,14 @@ export class Ocean {
   private actUse(sim: Sim, diver: Sim["divers"][number]) {
     const had = diver.vehicleId;
     const seat = diver.seat;
+    const wasPowered = sim.ecology[diver.region].powered;
+    const toastId = sim.toastId;
     pressUse(sim, diver);
+    if (!wasPowered && sim.ecology[diver.region].powered) {
+      for (const observer of sim.divers) this.toast(observer.id, ECOLOGY_EVENTS.power);
+    } else {
+      for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
+    }
     if (had && !diver.vehicleId) this.toast(diver.id, "You slip off the hull.");
     else if (diver.vehicleId && diver.seat !== seat) {
       this.toast(
@@ -896,6 +912,7 @@ export function glideOcean(sim: Sim, dt: number) {
 
 export function applyOceanView(sim: Sim, selfId: string, snap: OceanSnap) {
   sim.time = snap.time;
+  sim.ecology[snap.you.region] = reviveEcology(snap.ecology);
   sim.flags = { ...snap.flags };
   sim.discovered = [...snap.seen];
   sim.shared = [...(snap.found ?? [])];

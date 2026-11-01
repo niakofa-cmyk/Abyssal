@@ -1,7 +1,7 @@
 import { getSql } from "@/lib/db";
 import { Ocean, type OceanBody, type OceanIntent } from "./ocean.ts";
 
-const BUILD = 2;
+const BUILD = 3;
 
 type Runtime = {
   build: number;

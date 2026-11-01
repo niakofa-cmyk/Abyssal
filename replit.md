@@ -16,6 +16,12 @@ A cooperative underwater survival and exploration game with a shared ocean and b
 
 ## Run & Operate
 
+- Build direction: [the user's game assessment](docs/abyssal-build-reference.md).
+- Implemented-versus-planned capabilities: [development status](docs/abyssal-development-status.md). Keep this current as gameplay changes.
+
+- `pnpm --filter @workspace/abyssal run dev` — run the main game
+- `pnpm --filter @workspace/abyssal run test` — simulation, persistence, and contract tests
+- `pnpm --filter @workspace/abyssal run build` — build the Railway game service
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
@@ -26,31 +32,40 @@ A cooperative underwater survival and exploration game with a shared ocean and b
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- Main game: React, TanStack Start, Vite, Nitro Node server, and the existing Canvas 2D simulation
+- Game-owned API: `/api/ocean`, `/api/rtc`, and `/api/health`; the separate Express scaffold is not the persistent ocean service
+- Game persistence: PostgreSQL in production, with explicit embedded PGlite support for local development
+- Shared database libraries: PostgreSQL + Drizzle ORM
+- Mobile companion: Expo / React Native, using the shared generated API client
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/abyssal/src/game/` — simulation, regional ecology, ocean authority, rendering, and saves
+- `artifacts/abyssal/src/components/abyssal/` — game UI, opening, journal, and map
+- `artifacts/abyssal-mobile/` — mobile companion
+- `lib/api-spec/openapi.yaml` — shared API contract; regenerate clients after changes
+- `docs/` — source build reference and implementation boundaries
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Extend existing saves with backward-compatible optional fields rather than resetting diver progress.
+- Shared-ocean authority and experimental frequency-mode P2P are separate systems; do not describe them as interchangeable.
+- Empty ocean sectors sleep. Persistent history does not imply uninterrupted ecological simulation while a sector is empty.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
-
-## User preferences
-
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Abyssal combines underwater survival, cooperative vehicles, and historical investigation across five existing regions.
+The Living Ocean foundation adds player-caused regional changes and ecological responses.
+The trench and playable surface chapter remain future campaign work.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Simulation state has separate serializers for shared-ocean persistence, frequency snapshots, and local saves. Extend and test each relevant path together.
+- Player actions and ecological time advance only in the authoritative simulation; clients consume snapshots.
+- Preserve the distinction between personal archive records, shared historical evidence, and shared environmental memory.
 
 ## Pointers
 

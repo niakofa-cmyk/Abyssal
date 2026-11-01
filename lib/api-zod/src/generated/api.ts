@@ -21,10 +21,40 @@ export const HealthCheckResponse = zod.object({
  * Returns the current sectors, their occupancy, and shared world flags.
  * @summary Read the live sector roster
  */
+export const getOceanRosterResponseSnapEcologyBloomMin = 0;
+export const getOceanRosterResponseSnapEcologyBloomMax = 1;
+
+export const getOceanRosterResponseSnapEcologyNoiseMin = 0;
+export const getOceanRosterResponseSnapEcologyNoiseMax = 100;
+
+export const getOceanRosterResponseSnapEcologyEventsMax = 8;
+
+
+
 export const GetOceanRosterResponse = zod.object({
   "ok": zod.boolean(),
   "token": zod.string().optional(),
   "snap": zod.object({
+  "ecology": zod.object({
+  "powered": zod.boolean(),
+  "bloom": zod.number().min(getOceanRosterResponseSnapEcologyBloomMin).max(getOceanRosterResponseSnapEcologyBloomMax),
+  "noise": zod.number().min(getOceanRosterResponseSnapEcologyNoiseMin).max(getOceanRosterResponseSnapEcologyNoiseMax),
+  "disturbance": zod.number(),
+  "activeSeconds": zod.number(),
+  "poweredSeconds": zod.number(),
+  "source": zod.union([zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}),zod.null()]),
+  "station": zod.union([zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}),zod.null()]),
+  "events": zod.array(zod.object({
+  "kind": zod.enum(['power', 'disturbance', 'bloom', 'signal']),
+  "at": zod.number().describe('Occupied-sector simulation time in seconds, not wall-clock time.')
+})).max(getOceanRosterResponseSnapEcologyEventsMax)
+}).optional(),
   "time": zod.number(),
   "you": zod.object({
   "id": zod.string(),
@@ -170,10 +200,40 @@ export const OceanActionBody = zod.union([zod.object({
 })
 })])
 
+export const oceanActionResponseSnapEcologyBloomMin = 0;
+export const oceanActionResponseSnapEcologyBloomMax = 1;
+
+export const oceanActionResponseSnapEcologyNoiseMin = 0;
+export const oceanActionResponseSnapEcologyNoiseMax = 100;
+
+export const oceanActionResponseSnapEcologyEventsMax = 8;
+
+
+
 export const OceanActionResponse = zod.object({
   "ok": zod.boolean(),
   "token": zod.string().optional(),
   "snap": zod.object({
+  "ecology": zod.object({
+  "powered": zod.boolean(),
+  "bloom": zod.number().min(oceanActionResponseSnapEcologyBloomMin).max(oceanActionResponseSnapEcologyBloomMax),
+  "noise": zod.number().min(oceanActionResponseSnapEcologyNoiseMin).max(oceanActionResponseSnapEcologyNoiseMax),
+  "disturbance": zod.number(),
+  "activeSeconds": zod.number(),
+  "poweredSeconds": zod.number(),
+  "source": zod.union([zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}),zod.null()]),
+  "station": zod.union([zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}),zod.null()]),
+  "events": zod.array(zod.object({
+  "kind": zod.enum(['power', 'disturbance', 'bloom', 'signal']),
+  "at": zod.number().describe('Occupied-sector simulation time in seconds, not wall-clock time.')
+})).max(oceanActionResponseSnapEcologyEventsMax)
+}).optional(),
   "time": zod.number(),
   "you": zod.object({
   "id": zod.string(),

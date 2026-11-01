@@ -224,9 +224,62 @@ components:
             - type: string
             - type: "null"
       required: [id, name, region, x, y, facing, aimX, aimY, hp, o2, ammo, cells, alive]
+    EcologyPoint:
+      type: object
+      required: [x, y]
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+    EcologyEvent:
+      type: object
+      required: [kind, at]
+      properties:
+        kind:
+          type: string
+          enum: [power, disturbance, bloom, signal]
+        at:
+          type: number
+          description: Occupied-sector simulation time in seconds, not wall-clock time.
+    RegionEcology:
+      type: object
+      required: [powered, bloom, noise, disturbance, activeSeconds, poweredSeconds, source, station, events]
+      properties:
+        powered:
+          type: boolean
+        bloom:
+          type: number
+          minimum: 0
+          maximum: 1
+        noise:
+          type: number
+          minimum: 0
+          maximum: 100
+        disturbance:
+          type: number
+        activeSeconds:
+          type: number
+        poweredSeconds:
+          type: number
+        source:
+          anyOf:
+            - $ref: "#/components/schemas/EcologyPoint"
+            - type: "null"
+        station:
+          anyOf:
+            - $ref: "#/components/schemas/EcologyPoint"
+            - type: "null"
+        events:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/EcologyEvent"
     OceanSnapshot:
       type: object
       properties:
+        ecology:
+          $ref: "#/components/schemas/RegionEcology"
         time:
           type: number
         you:

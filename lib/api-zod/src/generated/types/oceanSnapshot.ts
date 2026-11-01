@@ -8,9 +8,11 @@
 import type { DiverView } from './diverView';
 import type { OceanSnapshotCreaturesItem } from './oceanSnapshotCreaturesItem';
 import type { OceanSnapshotVehiclesItem } from './oceanSnapshotVehiclesItem';
+import type { RegionEcology } from './regionEcology';
 import type { SectorReport } from './sectorReport';
 
 export interface OceanSnapshot {
+  ecology?: RegionEcology;
   time: number;
   you: DiverView;
   roster: SectorReport[];

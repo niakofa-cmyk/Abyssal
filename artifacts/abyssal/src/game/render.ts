@@ -121,6 +121,22 @@ export function drawSea(
   }
 
   const x0 = Math.max(0, Math.floor(camX / TILE) - 1);
+  const memory = sim.ecology[regionId];
+  if (memory.powered && memory.station) {
+    const x = memory.station.x - camX;
+    const y = memory.station.y - camY;
+    const radius = 65 + memory.bloom * 110;
+    const glow = ctx.createRadialGradient(x, y, 2, x, y, radius);
+    glow.addColorStop(0, `rgba(70, 225, 190, ${0.16 + memory.bloom * 0.22})`);
+    glow.addColorStop(1, "rgba(30, 135, 125, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    // Growth follows the conduits rather than creating an unrelated random event.
+    ctx.fillStyle = "#76dac1";
+    for (let i = 0; i < Math.floor(memory.bloom * 20); i += 1) {
+      ctx.fillRect(x + Math.sin(i * 2.4) * radius * 0.7, y + Math.cos(i * 1.7) * radius * 0.35, 2, 2);
+    }
+  }
   const x1 = Math.min(region.w - 1, Math.ceil((camX + VIEW_W) / TILE) + 1);
   const y0 = Math.max(0, Math.floor(camY / TILE) - 1);
   const y1 = Math.min(region.h - 1, Math.ceil((camY + VIEW_H) / TILE) + 1);
@@ -176,6 +192,7 @@ export function drawSea(
     gouge(ctx, camX, camY, 13 * TILE + 8, 13 * TILE + 6);
   }
 
+  const observer = sim.divers.find((d) => d.id === focusId);
   for (const marker of sim.markers) {
     if (marker.region !== regionId) continue;
     const p = screen(camX, camY, marker.x, marker.y);
@@ -183,6 +200,19 @@ export function drawSea(
     else {
       ctx.strokeStyle = marker.kind === "upgrade" ? "#e7a04a" : "#3ee0c5";
       ctx.strokeRect(p.x - 10, p.y - 10, 20, 20);
+      if (marker.kind === "repair" && observer?.alive && !observer.vehicleId &&
+          Math.hypot(observer.x - marker.x, observer.y - marker.y) <= 70) {
+        ctx.save();
+        ctx.font = "8px monospace";
+        ctx.textAlign = "center";
+        const label = memory.powered ? "GRID ONLINE" : "E / USE: GRID · 1 CELL";
+        const width = ctx.measureText(label).width + 10;
+        ctx.fillStyle = "rgba(2, 12, 18, 0.9)";
+        ctx.fillRect(p.x - width / 2, p.y - 29, width, 13);
+        ctx.fillStyle = "#8cf1d4";
+        ctx.fillText(label, p.x, p.y - 20);
+        ctx.restore();
+      }
     }
   }
 

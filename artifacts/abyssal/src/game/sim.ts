@@ -16,6 +16,7 @@ import type {
 import { TILE } from "./types.ts";
 import { isSolid, tileAt, buildLayout } from "./world.ts";
 import { casesClosedBy } from "./archive.ts";
+import { advanceEcology, createEcology, emitNoise, restorePower, ECOLOGY_EVENTS } from "./ecology.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -162,6 +163,7 @@ export function createSim(opts: SpawnOpts): Sim {
     taken: [],
     discovered: [],
     shared: [],
+    ecology: createEcology(),
     explored: {
       breach: chunks(Math.ceil(layout.regions.breach.w / 4)),
       plains: chunks(Math.ceil(layout.regions.plains.w / 4)),
@@ -323,9 +325,15 @@ export function objective(sim: Sim, diver: Diver | undefined) {
   if (!sim.flags.scooterSeen && diver.region === "breach") {
     return "Air is leaving you. A motor is wedged in the upper gallery.";
   }
+  if (diver.region === "breach" && !sim.discovered.includes("breach-blackbox")) {
+    return "Recover the wreck's black-box record. Its account of the failure may not agree with the warning.";
+  }
+  if (diver.region === "breach" && !sim.ecology.breach.powered) {
+    return "The east lock leads to the plains. Optional: restore a repair-station grid with E and one cell, then watch the life respond.";
+  }
   if (diver.region === "breach") return "The east lock still cycles. It drops into the plains.";
   if (!sim.flags.kiteSeen) return "A two-seat hull is in the wreck light. It will not swim itself.";
-  if (!sim.flags.mawDead) return "The lantern is a mouth. It telegraphs. Share the shot.";
+  if (!sim.flags.mawDead) return "Watch the lantern before committing. Quiet water hides you; engines and weapons draw attention.";
   if (!sim.flags.barrowSeen) return "The shelf door is open. A three-seat hull waits in the drowned city.";
   if (diver.region === "city" || diver.region === "plains") return "East of the glass, the works are still live. The reef is past the furnaces.";
   if (diver.region === "works") return "Furnaces and sentries. The reef shaft is the far lock.";
@@ -406,6 +414,14 @@ function stepMaw(sim: Sim, c: Creature, foe: Diver | undefined, dt: number) {
     note(sim, "The Lantern Maw has your scent. The lure flares before it moves.");
   }
   if (!c.aggro) {
+    const memory = sim.ecology[c.region];
+    if (memory.noise > 25 && memory.source && hypot(memory.source.x - c.x, memory.source.y - c.y) < 760) {
+      c.vx = (memory.source.x - c.x) * 0.12;
+      c.vy = (memory.source.y - c.y) * 0.12;
+      c.facing = faceFrom(0, c.vx, c.facing);
+      moveBody(region, c, 46, 22, dt, sim.flags.mawDead);
+      return;
+    }
     c.vx = Math.sin(sim.time * 0.6) * 28;
     c.vy = Math.cos(sim.time * 0.4) * 16;
     c.facing = faceFrom(0, c.vx, c.facing);
@@ -558,9 +574,13 @@ function stepCreature(sim: Sim, c: Creature, dt: number) {
     return;
   }
   if (c.kind === "darter") {
-    if (foe && hypot(foe.x - c.x, foe.y - c.y) < 130) {
-      const dx = c.x - foe.x;
-      const dy = c.y - foe.y;
+    const memory = sim.ecology[c.region];
+    const disturbance = memory.noise > 25 && memory.source &&
+      hypot(memory.source.x - c.x, memory.source.y - c.y) < 450 ? memory.source : null;
+    const threat = disturbance ?? (foe && hypot(foe.x - c.x, foe.y - c.y) < 130 ? foe : null);
+    if (threat) {
+      const dx = c.x - threat.x;
+      const dy = c.y - threat.y;
       const m = hypot(dx, dy) || 1;
       c.vx = (dx / m) * 92;
       c.vy = (dy / m) * 70;
@@ -577,8 +597,13 @@ function stepCreature(sim: Sim, c: Creature, dt: number) {
   c.timer -= dt;
   const lunge = c.kind === "hunter" ? 214 : 176;
   if (c.state === "patrol") {
-    c.vx += (c.homeX - c.x) * 0.4 * dt;
-    c.vy += (c.homeY - c.y) * 0.4 * dt;
+    const memory = sim.ecology[c.region];
+    const sound = memory.noise > 25 && memory.source &&
+      hypot(memory.source.x - c.x, memory.source.y - c.y) < 600 ? memory.source : null;
+    const warmth = c.kind === "eel" && memory.powered ? memory.station : null;
+    const target = !foe ? (sound ?? warmth) : null;
+    c.vx += ((target?.x ?? c.homeX) - c.x) * 0.4 * dt;
+    c.vy += ((target?.y ?? c.homeY) - c.y) * 0.4 * dt;
     c.vx *= Math.exp(-1.5 * dt);
     if (foe) {
       c.state = "warn";
@@ -772,6 +797,18 @@ export function pressUse(sim: Sim, diver: Diver) {
     sim.events.push("exit");
     return;
   }
+  const station = sim.markers.find((marker) => marker.region === diver.region && marker.kind === "repair" &&
+    hypot(marker.x - diver.x, marker.y - diver.y) <= 52);
+  if (station && !sim.ecology[diver.region].powered) {
+    if (diver.cells > 0 && restorePower(sim.ecology[diver.region], station.x, station.y)) {
+      diver.cells -= 1;
+      if (diver.kind === "remote") sim.outbox.push({ k: "grant", id: diver.id, kind: "cell", amount: -1 });
+      note(sim, ECOLOGY_EVENTS.power);
+      sim.events.push("repair");
+      return;
+    }
+    note(sim, "One energy cell would restore this district grid. Restoring it will attract life.");
+  }
   let best: Vehicle | undefined;
   let bestD = 96;
   for (const vehicle of sim.vehicles) {
@@ -832,7 +869,7 @@ function grant(sim: Sim, diver: Diver, kind: PickupKind, amount: number) {
   if (kind === "o2") diver.o2 = clamp(diver.o2 + amount, 0, diver.o2Max);
   if (kind === "med") diver.hp = clamp(diver.hp + amount, 0, diver.hpMax);
   if (kind === "ammo") diver.ammo = clamp(diver.ammo + amount, 0, 28);
-  if (kind === "cell") diver.cells += amount;
+  if (kind === "cell") diver.cells = clamp(diver.cells + amount, 0, 99);
   diver.hypoxia = 0;
   diver.warned = false;
 }
@@ -843,8 +880,8 @@ export function applyGrant(sim: Sim, id: string, kind: PickupKind, amount: numbe
   grant(sim, diver, kind, amount);
   if (diver.kind === "you") {
     const label = kind === "o2" ? "Oxygen" : kind === "med" ? "Medicine" : kind === "ammo" ? "Darts" : "Energy cell";
-    note(sim, `${label} aboard.`);
-    sim.events.push("pickup");
+    note(sim, amount < 0 ? `${label} used.` : `${label} aboard.`);
+    if (amount > 0) sim.events.push("pickup");
   }
 }
 
@@ -996,6 +1033,7 @@ function tryFire(sim: Sim, diver: Diver) {
     vehicle.fireCd = vehicle.seats.gunner ? (heavy ? 0.62 : 0.5) : 1.05;
     vehicle.energy -= heavy ? 9 : 7;
     sim.events.push("torpedo");
+    emitNoise(sim.ecology[vehicle.region], vehicle.x, vehicle.y, 42);
     return;
   }
   if (diver.vehicleId || diver.fireCd > 0 || diver.ammo <= 0) return;
@@ -1019,6 +1057,7 @@ function tryFire(sim: Sim, diver: Diver) {
   diver.ammo -= 1;
   diver.fireCd = sim.flags.upgraded ? 0.32 : 0.42;
   sim.events.push("shot");
+  emitNoise(sim.ecology[diver.region], diver.x, diver.y, 22);
 }
 
 function killCreature(sim: Sim, c: Creature) {
@@ -1344,6 +1383,17 @@ export function stepSim(sim: Sim, dt: number, auth: boolean, selfId: string) {
     for (const vehicle of sim.vehicles) {
       if (awake(sim, vehicle.region)) stepVehicle(sim, vehicle, dt);
     }
+    for (const id of ASCENT) {
+      if (!awake(sim, id)) continue;
+      const memory = sim.ecology[id];
+      for (const vehicle of sim.vehicles) {
+        if (vehicle.region === id && !vehicle.destroyed && vehicle.seats.pilot &&
+            hypot(vehicle.vx, vehicle.vy) > 35) emitNoise(memory, vehicle.x, vehicle.y, dt * 16);
+      }
+      const previousEvents = memory.events.length;
+      advanceEcology(memory, dt);
+      for (const event of memory.events.slice(previousEvents)) note(sim, ECOLOGY_EVENTS[event.kind]);
+    }
     for (const creature of sim.creatures) {
       if (awake(sim, creature.region)) stepCreature(sim, creature, dt);
     }
@@ -1387,6 +1437,7 @@ export function stepSim(sim: Sim, dt: number, auth: boolean, selfId: string) {
 export function exportWorld(sim: Sim): WorldSnap {
   return {
     t: sim.time,
+    ecology: createEcology(sim.ecology),
     flags: { ...sim.flags },
     taken: sim.pickups.filter((p) => p.taken).map((p) => p.id),
     creatures: sim.creatures.map((c) => ({
@@ -1451,6 +1502,7 @@ export function exportWorld(sim: Sim): WorldSnap {
 }
 
 export function importWorld(sim: Sim, snap: WorldSnap, selfId: string) {
+  sim.ecology = createEcology(snap.ecology);
   sim.flags = { ...sim.flags, ...snap.flags };
   for (const id of snap.taken) {
     const p = sim.pickups.find((item) => item.id === id);
@@ -1553,6 +1605,7 @@ export function applyOwn(
     aimX?: number;
     aimY?: number;
     fire: boolean;
+    cells?: number;
     tint: Diver["tint"];
   },
   selfId: string,
@@ -1588,6 +1641,7 @@ export function applyOwn(
   local.seat = snap.seat;
   local.name = snap.name;
   local.fireLatch = snap.fire;
+  if (typeof snap.cells === "number" && Number.isFinite(snap.cells)) local.cells = clamp(Math.floor(snap.cells), 0, 99);
 }
 
 export function velocityOf(sim: Sim, selfId: string) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Anchor, ArrowLeft, BookOpen, Map, Radio, Volume2, VolumeX } from "lucide-react";
 import { StageMap } from "@/components/abyssal/StageMap";
+import { LivingOceanPanel } from "@/components/abyssal/LivingOceanPanel";
 import { BESTIARY } from "@/game/content";
 import { archiveOf, KIND_LABEL, mawStages } from "@/game/archive";
 import { DescentLink } from "@/game/link";
@@ -41,6 +42,8 @@ import { Opening } from "@/components/abyssal/Opening";
 import { SurfaceVision } from "@/components/abyssal/SurfaceVision";
 import { understanding, UNDERSTANDING } from "@/game/understanding";
 import { drawPassage } from "@/game/opening";
+import { ecologySummary } from "@/game/ecology";
+import { consumeActionEdge, queueActionKey } from "@/game/input";
 
 type Overlay = "none" | "map" | "journal" | "pause" | "dead";
 
@@ -48,6 +51,7 @@ type Session = {
   sim: Sim;
   selfId: string;
   keys: Set<string>;
+  pressed: Set<string>;
   probe: Set<string>;
   prev: Set<string>;
   link: DescentLink;
@@ -92,6 +96,7 @@ type Hud = {
   region: string;
   depth: string;
   objective: string;
+  ecology: string;
   understanding: string;
   seat: string;
   hull: number;
@@ -123,11 +128,7 @@ function held(session: Session, code: string) {
 }
 
 function edge(session: Session, code: string) {
-  const down = held(session, code);
-  const was = session.prev.has(code);
-  if (down) session.prev.add(code);
-  else session.prev.delete(code);
-  return down && !was;
+  return consumeActionEdge(code, held(session, code), session.prev, session.pressed);
 }
 
 function axes(session: Session, left: string, right: string, up: string, down: string) {
@@ -268,9 +269,6 @@ function installProbe(session: Session) {
 function applyInput(session: Session) {
   const you = findDiver(session.sim, session.selfId);
   if (!you) return;
-  if (edge(session, "Escape")) session.overlay = session.overlay === "none" ? "pause" : "none";
-  if (edge(session, "KeyM")) session.overlay = session.overlay === "map" ? "none" : "map";
-  if (edge(session, "KeyJ")) session.overlay = session.overlay === "journal" ? "none" : "journal";
   if (session.overlay === "pause" || session.overlay === "map" || session.overlay === "journal") {
     if (session.ocean) {
       session.ocean.intent.ax = 0;
@@ -400,6 +398,7 @@ function readHud(session: Session): Hud {
     region: region.name,
     depth: `${depth} m`,
     objective: objective(session.sim, you),
+    ecology: ecologySummary(session.sim.ecology[you?.region ?? "breach"]),
     understanding: grasp.title,
     seat: you?.seat
       ? `${vehicle?.kind === "barrow" ? "Barrow" : vehicle?.kind === "kite" ? "Kite" : "Scooter"} · ${you.seat}`
@@ -475,10 +474,25 @@ export function GameApp() {
     if (!session) return;
     session.overlay = "none";
     session.keys.clear();
+    session.pressed.clear();
     session.prev.clear();
     session.touch = { ax: 0, ay: 0, fire: false, use: false };
     setOverlay("none");
     canvasRef.current?.focus({ preventScroll: true });
+  }
+
+  function togglePanel(panel: "pause" | "map" | "journal") {
+    const session = sessionRef.current;
+    if (!session || session.overlay === "dead") return;
+    if (session.overlay === panel) {
+      resumeGame();
+      return;
+    }
+    session.overlay = panel;
+    session.keys.clear();
+    session.pressed.clear();
+    session.prev.clear();
+    setOverlay(panel);
   }
 
   useEffect(() => {
@@ -526,10 +540,11 @@ export function GameApp() {
     const down = (event: KeyboardEvent) => {
       const session = sessionRef.current;
       if (!session || session.mode !== "play") return;
-      if (event.code === "Escape" && event.repeat) return;
-      if (event.code === "Escape" && session.overlay !== "none" && session.overlay !== "dead") {
+      if (event.code === "Escape") {
         event.preventDefault();
-        resumeGame();
+        if (event.repeat || session.overlay === "dead") return;
+        if (session.overlay !== "none") resumeGame();
+        else togglePanel("pause");
         return;
       }
       // Let panel buttons retain normal Enter, Space, and Tab behavior.
@@ -537,13 +552,22 @@ export function GameApp() {
         if (event.target.closest("input, textarea, select")) return;
         if (event.target.closest("button, a, summary") && ["Enter", "Space", "Tab"].includes(event.code)) return;
       }
+      if ((event.code === "KeyM" || event.code === "KeyJ") && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        if (!event.repeat) togglePanel(event.code === "KeyM" ? "map" : "journal");
+        return;
+      }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Tab"].includes(event.code)) {
         event.preventDefault();
       }
       session.keys.add(event.code);
+      queueActionKey(session.pressed, event.code, event.repeat);
     };
     const up = (event: KeyboardEvent) => sessionRef.current?.keys.delete(event.code);
-    const blur = () => sessionRef.current?.keys.clear();
+    const blur = () => {
+      sessionRef.current?.keys.clear();
+      sessionRef.current?.pressed.clear();
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
@@ -742,6 +766,7 @@ export function GameApp() {
         sim,
         selfId: token,
         keys: new Set(),
+        pressed: new Set(),
         probe: new Set(),
         prev: new Set(),
         link: new DescentLink(token),
@@ -835,6 +860,7 @@ export function GameApp() {
       sim,
       selfId,
       keys: new Set(),
+      pressed: new Set(),
       probe: new Set(),
       prev: new Set(),
       link,
@@ -1091,6 +1117,7 @@ export function GameApp() {
             {hud.toasts[0] ? <p className="bg-deep/75 px-3 py-2 text-sm text-foam">{hud.toasts[0]}</p> : null}
             <p className="mt-2 text-[10px] tracking-[0.18em] text-amber uppercase">{hud.understanding}</p>
             <p className="mt-1 text-xs text-mist">{hud.objective}</p>
+            <p className="mt-1 text-[10px] text-biolume">{hud.ecology} · J for regional memory</p>
             {hud.soren ? <p className="text-[10px] tracking-[0.14em] text-amber uppercase">{hud.soren}</p> : null}
           </div>
         </div>
@@ -1098,18 +1125,12 @@ export function GameApp() {
 
       <div className="absolute right-3 bottom-3 flex gap-2 md:right-4">
         <button type="button" className="grid size-11 place-items-center border border-line bg-deep/85" aria-label="Map" onClick={() => {
-          const session = sessionRef.current;
-          if (!session) return;
-          session.overlay = session.overlay === "map" ? "none" : "map";
-          setOverlay(session.overlay);
+          togglePanel("map");
         }}>
           <Map className="size-4" />
         </button>
         <button type="button" className="grid size-11 place-items-center border border-line bg-deep/85" aria-label="Journal" onClick={() => {
-          const session = sessionRef.current;
-          if (!session) return;
-          session.overlay = session.overlay === "journal" ? "none" : "journal";
-          setOverlay(session.overlay);
+          togglePanel("journal");
         }}>
           <BookOpen className="size-4" />
         </button>
@@ -1129,7 +1150,7 @@ export function GameApp() {
           />
           <div className="grid gap-2">
             <TouchButton label="Fire" onDown={() => flag("fire", true)} onUp={() => flag("fire", false)} />
-            <TouchButton label="Board" onDown={() => flag("use", true)} onUp={() => undefined} />
+            <TouchButton label="Use / board" onDown={() => flag("use", true)} onUp={() => undefined} />
           </div>
           <Stick
             label="Aim"
@@ -1185,7 +1206,8 @@ export function GameApp() {
                 <ul className="mt-4 space-y-1 text-sm text-mist">
                   <li>WASD swim or helm. A left, D right. W rises, S sinks.</li>
                   <li>The mouse aims. On a phone the right stick aims. The tick is the shot.</li>
-                  <li>Space harpoon or torpedo. E board or exit. R repair with a cell.</li>
+                  <li>Space harpoon or torpedo. E board, exit, or restore a nearby district grid with one cell. R repairs a hull.</li>
+                  <li>Warm conduits attract ribbon eels. Engines and weapons disturb the ecosystem. Going quietly is a choice.</li>
                   <li>Arrows and L are Imani, if she launched with you. V holds Soren in this sector.</li>
                   <li>Tab cycles seats. The helm steers. The tube fires. The pumps brace. The sea keeps the booking.</li>
                   <li>If your signal drops, the seat opens. Coming back puts you where you left the water.</li>
@@ -1494,6 +1516,10 @@ function Journal({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
   return (
     <div>
       <h2 className="font-display text-3xl">Archive</h2>
+      <LivingOceanPanel
+        memory={sim.ecology[you?.region ?? "breach"]}
+        place={sim.regions[you?.region ?? "breach"].name}
+      />
       <p className="mt-2 text-[10px] tracking-[0.18em] text-amber uppercase">
         Understanding · {grasp.index + 1} of {UNDERSTANDING.length}
       </p>

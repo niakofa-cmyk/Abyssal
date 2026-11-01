@@ -1,3 +1,4 @@
 - [API service path ownership](api-service-path-ownership.md) — check for the scaffold API service shadowing application-owned `/api/*` routes.
 - [Expo package freshness](expo-package-freshness.md) — respect pnpm minimumReleaseAge; use compatible versions allowed by the workspace rather than bypassing the guard.
 - [Abyssal Railway deployment](abyssal-railway-deployment.md) — Railway is Abyssal's production target; keep deployment work on Railway, not Replit publishing.
+- [Abyssal game direction](abyssal-game-direction.md) — build-reference document, Living Ocean priorities, and boundaries between implemented gameplay and future ambition.

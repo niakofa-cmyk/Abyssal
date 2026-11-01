@@ -570,6 +570,22 @@ function DiveConsole({
         </View>
       ) : null}
 
+      {snapshot.ecology ? (
+        <View style={[styles.logCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionEyebrow, { color: colors.primary }]}>LIVING OCEAN</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+            {snapshot.ecology.noise >= 40 ? 'Disturbed water' : snapshot.ecology.powered ? 'The grid remembers' : 'A quiet district'}
+          </Text>
+          <Text style={[styles.controlHint, { color: colors.mutedForeground }]}>
+            {snapshot.ecology.powered ? 'GRID RESTORED' : 'GRID OFFLINE'} · NOISE {Math.round(snapshot.ecology.noise)} / 100 · GROWTH {Math.round(snapshot.ecology.bloom * 100)}%
+          </Text>
+          <Text style={[styles.connectionText, { color: colors.foreground }]}>
+            On foot, use a repair station with one cell to restore power. Warm conduits attract eels;
+            engines and weapons scatter small life and draw predators. Other divers share these regional changes.
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.controlsHeader}>
         <View>
           <Text style={[styles.sectionEyebrow, { color: colors.primary }]}>TOUCH INTERFACE</Text>

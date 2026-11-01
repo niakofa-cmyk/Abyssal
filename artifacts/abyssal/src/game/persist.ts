@@ -1,4 +1,5 @@
 import type { RegionId, Sim } from "./types";
+import { createEcology, type Ecology } from "./ecology.ts";
 
 const PROFILE = "abyssal-profile-v2";
 const LEGACY_PROFILE = "abyssal-profile-v1";
@@ -15,6 +16,7 @@ export type Profile = {
 
 export type SaveFile = {
   version: 1;
+  ecology?: Ecology;
   time: number;
   you: { region: RegionId; x: number; y: number; hp: number; o2: number; ammo: number; cells: number };
   discovered: string[];
@@ -92,6 +94,7 @@ export function writeSave(sim: Sim, selfId: string) {
       ammo: you.ammo,
       cells: you.cells,
     },
+    ecology: createEcology(sim.ecology),
     discovered: sim.discovered,
     explored: sim.explored,
     flags: sim.flags,
@@ -122,6 +125,7 @@ export function clearSave() {
 
 export function applySave(sim: Sim, selfId: string, file: SaveFile) {
   sim.time = file.time;
+  sim.ecology = createEcology(file.ecology);
   sim.discovered = [...file.discovered];
   sim.flags = { ...sim.flags, ...file.flags };
   for (const id of Object.keys(sim.explored) as RegionId[]) {
