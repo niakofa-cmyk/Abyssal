@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-abyss: #06141c;
+  --color-deep: #02080c;
+  --color-ink: #0a1c24;
+  --color-hull: #14343c;
+  --color-foam: #e6f1ee;
+  --color-mist: #8aa4a6;
+  --color-biolume: #3ee0c5;
+  --color-amber: #e7a04a;
+  --color-rust: #c4553a;
+  --color-line: #1e3c44;
+  --font-sans: "Outfit", "Avenir Next", sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --radius-panel: 0.4rem;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-deep);
+    color: var(--color-foam);
+    font-family: var(--font-sans);
+  }
+}
