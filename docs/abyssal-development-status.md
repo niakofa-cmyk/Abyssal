@@ -34,9 +34,11 @@ Update this status document as gameplay capabilities change.
 
 - Confirmed the Railway production service is linked to `niakofa-cmyk/Abyssal` on `main`; the production health endpoint reports PostgreSQL ready.
 - A consented 95-second live return probe preserved the test beacon, diver identity, region, and health. It did **not** restore the saved position or oxygen within tolerance, even though the join and sync requests returned HTTP 200.
-- Railway logs for the test window showed successful HTTP responses but no application error that explains the state mismatch. The live result is a failed persistence check, not a certification.
-- The server scheduler had a concrete gap: after shelving the last diver, an idle region could stop the periodic save before the new shelf state reached PostgreSQL. The local fix persists state changed by an idle sweep; a regression test now verifies position and oxygen through `OceanBody` serialization and revival.
-- The fix has not been published to Railway or retested there. The production process was not restarted. The nonpersonal probe diver was left to auto-shelve; no other production record was removed or changed.
+- The idle-shelf write fix was published to Railway. A second controlled 95-second test still failed: the diver resumed with the same identity and region and preserved health, but position differed by 42.093 units and oxygen by 39.38.
+- The test window contained only the probe's requests; no other `/api/ocean` calls occurred between checkpoint and return. Railway reports one configured replica. This rules out another diver or a configured multi-replica race as the explanation, but does not identify the runtime cause.
+- Railway health remains ready with PostgreSQL, and the application returned HTTP 200. No runtime error explained the mismatch. The live result remains a failed persistence check, not a certification.
+- Local PII-free diagnostics now record adrift/shelve transitions and whether an idle-state write succeeded. These diagnostics pass local tests/build but have **not** been published; no third production test has been run.
+- The two nonpersonal probe records were left to auto-shelve; no existing production record was removed or changed.
 
 ## Still unverified or not implemented
 

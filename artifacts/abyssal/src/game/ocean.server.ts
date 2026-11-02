@@ -103,8 +103,18 @@ async function ensure(): Promise<Runtime> {
       const gap = now - rt.last;
       rt.last = now;
       const swept = rt.ocean.sweep(now);
+      if (swept.changed) {
+        console.info("[ocean] inactivity sweep", { adrift: swept.adrift, shelved: swept.shelved });
+      }
       if (!REGIONS_BUSY(rt.ocean)) {
-        if (swept) await save(rt);
+        if (swept.changed) {
+          const previousVersion = rt.version;
+          const persisted = await save(rt);
+          console.info("[ocean] idle sweep persistence", {
+            persisted,
+            versionAdvanced: rt.version > previousVersion,
+          });
+        }
         return;
       }
       const steps = Math.max(1, Math.min(3, Math.round(gap / 50)));
@@ -115,6 +125,7 @@ async function ensure(): Promise<Runtime> {
           await persist(rt);
         } catch (err) {
           if (err instanceof Error && err.message === "stale") {
+            console.warn("[ocean] journal conflict; refreshing world state");
             await pull(rt);
             return;
           }
@@ -142,16 +153,19 @@ async function catchUp(rt: Runtime) {
   rt.last = now;
 }
 
-async function save(rt: Runtime) {
+async function save(rt: Runtime): Promise<boolean> {
   try {
     await persist(rt);
     rt.savedAt = Date.now();
+    return true;
   } catch (err) {
     if (err instanceof Error && err.message === "stale") {
+      console.warn("[ocean] journal conflict; refreshing world state");
       await pull(rt);
-      return;
+      return false;
     }
     console.error("[ocean] journal failed", err);
+    return false;
   }
 }
 

@@ -42,7 +42,8 @@ describe("regional ocean", () => {
     ocean.setIntent(token, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, use: false, repair: false, cycle: false });
     ocean.step(1 / 20);
     const saved = ocean.snapshot(token).you;
-    assert.equal(ocean.sweep(Date.now() + 95_001), true, "shelving reports a durable state change");
+    const sweep = ocean.sweep(Date.now() + 95_001);
+    assert.deepEqual(sweep, { changed: true, adrift: 1, shelved: 1 });
     assert.equal(ocean.locate(token), undefined, "an inactive return beacon is shelved");
     const restoredOcean = Ocean.revive(ocean.toBody());
     assert.equal(restoredOcean.locate(token), undefined, "the saved diver remains shelved after world reload");

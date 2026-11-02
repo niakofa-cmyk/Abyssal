@@ -33,11 +33,11 @@ The surface revelation and trench remain future campaign work. The 2.5D recommen
 
 ## Persisting idle-world transitions
 
-A live Railway return probe preserved beacon, diver identity, region, and health but returned a different position and oxygen level after a 95-second absence. The API requests succeeded, so HTTP 200 alone is not evidence that a resumed dive restored its checkpoint. The server's idle sweep now reports state changes so shelving the final diver is persisted before the simulation timer goes idle; production must be retested after the fix is published.
+A live Railway return probe preserved beacon, diver identity, region, and health but returned a different position and oxygen level after a 95-second absence. The first idle-shelf persistence fix was published but did not resolve it: the next probe had a 42.093-unit position difference and a 39.38 oxygen difference. Request logs showed no other ocean calls during the interval, and Railway had one configured replica. HTTP 200 alone is not evidence that a resumed dive restored its checkpoint.
 
-**Why:** A shelved diver can be absent from active regions, which stops ordinary periodic saves; without an explicit write, another process or a restarted worker can revive an older world body.
+**Why:** The observed state mismatch persisted after fixing the known idle-shelf write gap. The remaining production cause is not established; the visible scheduler transitions and write outcome must be inspected rather than guessed.
 
-**How to apply:** Persist authoritative state changes even when all regions become inactive. Verify position, oxygen, identity, region, and health after both a long idle return and a Railway process/database reload before marking continuity reliable.
+**How to apply:** Persist authoritative state changes when regions become inactive, and use PII-free runtime logs to confirm sweep and database-write outcomes. Verify position, oxygen, identity, region, and health after a long idle return and a Railway process/database reload before marking continuity reliable.
 
 ## Reliable panel controls
 
