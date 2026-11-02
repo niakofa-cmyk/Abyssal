@@ -1,7 +1,7 @@
 import { getSql } from "@/lib/db";
 import { Ocean, type OceanBody, type OceanIntent } from "./ocean.ts";
 
-const BUILD = 3;
+const BUILD = 4;
 
 type Runtime = {
   build: number;
@@ -138,9 +138,7 @@ async function ensure(): Promise<Runtime> {
 }
 
 function REGIONS_BUSY(ocean: Ocean) {
-  return (["breach", "plains", "city", "works", "reef"] as const).some((id) =>
-    ocean.sectors[id].divers.some((d) => d.alive || d.respawn > 0),
-  );
+  return (["breach", "plains", "city", "works", "reef"] as const).some((id) => ocean.isRegionActive(id));
 }
 
 async function catchUp(rt: Runtime) {

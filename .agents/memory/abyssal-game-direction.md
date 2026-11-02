@@ -11,11 +11,11 @@ The user designated `docs/abyssal-build-reference.md` as a continuing reference 
 
 ## Product direction
 
-The latest repository assessment is preserved alongside the original build reference in `docs/abyssal-updated-repository-evaluation.md`.
+The latest repository assessment is preserved alongside the original build reference in `docs/abyssal-updated-repository-evaluation.md`. The newer engineering priorities are preserved in `docs/abyssal-next-implementation-recommendations.md`.
 
 **Why:** The user supplied a later evaluation and asked that it be saved, used to guide implementation, and kept as a reference.
 
-**How to apply:** Treat this evaluation as the current milestone order, not as proof that recommended systems already exist. Keep the earlier creative pitch as a separate reference.
+**How to apply:** Treat the latest recommendation as the current milestone order, not as proof that recommended systems already exist. Keep the earlier creative pitch and repository assessment as separate references.
 
 Prioritize a certified persistent cooperative expedition and Living Ocean: first verify the survival, save, and multiplayer foundations, then add bounded rewards, inventory, and ecology recovery. Preserve personal versus shared historical evidence.
 
@@ -38,6 +38,14 @@ A live Railway return probe preserved beacon, diver identity, region, and health
 **Why:** Players continue simulating during the intentional quiet grace before their beacon is marked adrift; comparing a later return to the last input falsely classifies that expected movement and oxygen use as persistence loss.
 
 **How to apply:** Persist authoritative state changes when regions become inactive. For return checks, compare the rejoined diver to the state captured at shelving, after the grace period; use transition/save logs to distinguish simulation from a missing database write.
+
+## Adrift diver lifecycle
+
+After a diver is marked adrift, freeze that diver's simulation state even when a teammate keeps the same region active. Continue simulating the shared region for connected players, but do not move, drain, damage, reward, or harvest discoveries for the disconnected diver. Shelve that diver when their own return window expires, independent of activity elsewhere.
+
+**Why:** Shared regional activity must not make a disconnected diver unsafe or immortal; either outcome breaks cooperative return behavior.
+
+**How to apply:** Keep the beacon and static diver visible during the grace-to-shelf window, isolate adrift divers from authoritative simulation ticks, and test same-region plus cross-region activity, reconnect-before-shelf, and shelf-then-revive without duplicate identities.
 
 ## Reliable panel controls
 

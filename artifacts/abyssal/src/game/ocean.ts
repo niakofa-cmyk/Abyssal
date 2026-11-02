@@ -349,20 +349,34 @@ export class Ocean {
       for (const crumb of player.toasts) crumb.life -= dt;
       player.toasts = player.toasts.filter((c) => c.life > 0).slice(0, 4);
     }
-    const occupied = REGIONS.filter((id) => this.liveHere(id));
+    const occupied = REGIONS.filter((id) => this.isRegionActive(id));
     for (const id of occupied) {
       const sim = this.sectors[id];
       sim.flags = { ...this.flags };
       const previousEcologyEvents = sim.ecology[id].events.length;
-      stepSim(sim, dt, true, "*");
+      const allDivers = sim.divers;
+      const adriftIds = new Set(
+        allDivers.filter((diver) => this.players.get(diver.id)?.adrift).map((diver) => diver.id),
+      );
+      if (adriftIds.size) sim.divers = allDivers.filter((diver) => !adriftIds.has(diver.id));
+      try {
+        stepSim(sim, dt, true, "*");
+      } finally {
+        if (adriftIds.size) {
+          const stepped = new Map(sim.divers.map((diver) => [diver.id, diver]));
+          sim.divers = allDivers.map((diver) => stepped.get(diver.id) ?? diver);
+        }
+      }
       for (const event of sim.ecology[id].events.slice(previousEcologyEvents)) {
-        for (const diver of sim.divers) this.toast(diver.id, ECOLOGY_EVENTS[event.kind]);
+        for (const diver of sim.divers) {
+          if (!this.players.get(diver.id)?.adrift) this.toast(diver.id, ECOLOGY_EVENTS[event.kind]);
+        }
       }
       this.pullFlags(sim);
       for (const event of sim.events) {
         for (const diver of sim.divers) {
           const player = this.players.get(diver.id);
-          if (!player) continue;
+          if (!player || player.adrift) continue;
           player.pending.push(event);
           if (player.pending.length > 24) player.pending.splice(0, player.pending.length - 24);
           if (event === "reward") this.toast(diver.id, "A shared supply is adrift where the creature fell.");
@@ -377,7 +391,7 @@ export class Ocean {
       }
       for (const diver of sim.divers) {
         const player = this.players.get(diver.id);
-        if (player) this.harvest(player, diver);
+        if (player && !player.adrift) this.harvest(player, diver);
       }
     }
     this.transfer();
@@ -706,7 +720,7 @@ export class Ocean {
     return { changed: adrift > 0 || shelved > 0, adrift, shelved };
   }
 
-  private liveHere(id: RegionId) {
+  isRegionActive(id: RegionId) {
     return this.sectors[id].divers.some((diver) => {
       if (this.players.get(diver.id)?.adrift) return false;
       return diver.alive || diver.respawn > 0;

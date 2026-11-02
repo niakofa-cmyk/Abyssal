@@ -8,6 +8,14 @@ function intent(partial: Partial<{ ax: number; ay: number; aimX: number; aimY: n
   return { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, ...partial };
 }
 
+function ageBeacon(ocean: Ocean, token: string, quietMs: number) {
+  const now = Date.now();
+  const player = ocean.players.get(token);
+  assert.ok(player);
+  player.heard = now - quietMs;
+  return ocean.sweep(now);
+}
+
 describe("regional ocean", () => {
   it("keeps two sectors alive while a third stays asleep", () => {
     const ocean = new Ocean();
@@ -76,6 +84,186 @@ describe("regional ocean", () => {
     assert.equal(returned.y, shelfCheckpoint.y);
     assert.equal(returned.hp, shelfCheckpoint.hp);
     assert.equal(returned.o2, shelfCheckpoint.o2);
+  });
+
+  it("freezes an adrift diver while a same-region partner keeps the sector active", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const bo = ocean.join(null, "Bo");
+    const scooter = ocean.sectors.breach.vehicles.find((vehicle) => vehicle.id === "scooter-1");
+    assert.ok(scooter);
+    ocean.place(ada, "breach", scooter.x, scooter.y);
+    ocean.place(bo, "breach", scooter.x + 16, scooter.y);
+    ocean.setIntent(ada, intent({ use: true }));
+    assert.equal(scooter.seats.pilot, ada);
+
+    const diver = ocean.locate(ada)!.diver;
+    diver.hp = 71;
+    diver.o2 = 23;
+    diver.ammo = 9;
+    diver.cells = 2;
+    const disconnectSweep = ageBeacon(ocean, ada, 12_000);
+    assert.equal(disconnectSweep.adrift, 1);
+    assert.equal(scooter.seats.pilot, null, "a dropped connection releases the vehicle seat");
+    assert.equal(diver.vehicleId, null);
+    const checkpoint = { x: diver.x, y: diver.y, hp: diver.hp, o2: diver.o2, ammo: diver.ammo, cells: diver.cells };
+    const sectorTime = ocean.sectors.breach.time;
+
+    ocean.setIntent(bo, intent({ ax: 1 }));
+    for (let i = 0; i < 60; i += 1) ocean.step(1 / 20);
+
+    assert.ok(ocean.sectors.breach.time > sectorTime, "the connected diver keeps the shared sector simulating");
+    assert.deepEqual(
+      {
+        x: diver.x,
+        y: diver.y,
+        hp: diver.hp,
+        o2: diver.o2,
+        ammo: diver.ammo,
+        cells: diver.cells,
+      },
+      checkpoint,
+      "the disconnected diver does not move, consume air, take damage, collect supplies, or discover records",
+    );
+    assert.equal(ocean.sectors.breach.divers.filter((item) => item.id === ada).length, 1);
+
+    assert.equal(ocean.join(ada, "Ada"), ada);
+    assert.equal(ocean.players.get(ada)?.adrift, false);
+    assert.equal(ocean.sectors.breach.divers.filter((item) => item.id === ada).length, 1);
+    assert.deepEqual(
+      { x: diver.x, y: diver.y, hp: diver.hp, o2: diver.o2, ammo: diver.ammo, cells: diver.cells },
+      checkpoint,
+      "reconnecting before the return window expires restores the same live diver",
+    );
+  });
+
+  it("shelves and restores a diver after the return window while the same region stays active", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const bo = ocean.join(null, "Bo");
+    ocean.place(bo, "breach", 12 * TILE, 8 * TILE);
+    const diver = ocean.locate(ada)!.diver;
+    diver.x = 15 * TILE;
+    diver.y = 9 * TILE;
+    diver.hp = 63;
+    diver.o2 = 18;
+    diver.ammo = 7;
+    diver.cells = 3;
+    assert.equal(ageBeacon(ocean, ada, 12_000).adrift, 1);
+    const checkpoint = { id: diver.id, region: diver.region, x: diver.x, y: diver.y, hp: diver.hp, o2: diver.o2, ammo: diver.ammo, cells: diver.cells };
+
+    ocean.setIntent(bo, intent({ ax: -1 }));
+    for (let i = 0; i < 20; i += 1) ocean.step(1 / 20);
+    const shelved = ageBeacon(ocean, ada, 120_000);
+    assert.equal(shelved.shelved, 1, "another diver's activity does not extend the disconnected diver's return window");
+    assert.equal(ocean.isRegionActive("breach"), true);
+    assert.equal(ocean.locate(ada), undefined);
+
+    const restored = Ocean.revive(ocean.toBody());
+    assert.equal(restored.join(ada, "Ada"), ada);
+    const returned = restored.locate(ada)!.diver;
+    assert.deepEqual(
+      { id: returned.id, region: returned.region, x: returned.x, y: returned.y, hp: returned.hp, o2: returned.o2, ammo: returned.ammo, cells: returned.cells },
+      checkpoint,
+    );
+    assert.equal(restored.sectors.breach.divers.filter((item) => item.id === ada).length, 1);
+  });
+
+  it("shelves a quiet beacon even when a different region remains active", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const bo = ocean.join(null, "Bo");
+    ocean.place(bo, "works", 10 * TILE, 8 * TILE);
+    const diver = ocean.locate(ada)!.diver;
+    diver.x = 14 * TILE;
+    diver.y = 10 * TILE;
+    diver.hp = 58;
+    diver.o2 = 16;
+    const breachTime = ocean.sectors.breach.time;
+    assert.equal(ageBeacon(ocean, ada, 12_000).adrift, 1);
+
+    ocean.setIntent(bo, intent({ ax: 1 }));
+    for (let i = 0; i < 20; i += 1) ocean.step(1 / 20);
+    assert.equal(ocean.sectors.breach.time, breachTime, "the empty breach remains asleep");
+    assert.ok(ocean.sectors.works.time > 0, "the occupied works sector continues simulating");
+
+    assert.equal(ageBeacon(ocean, ada, 120_000).shelved, 1);
+    const body = ocean.toBody();
+    const revived = Ocean.revive(body);
+    assert.equal(revived.join(ada, "Ada"), ada);
+    const returned = revived.locate(ada)!.diver;
+    assert.equal(returned.region, "breach");
+    assert.equal(returned.x, diver.x);
+    assert.equal(returned.y, diver.y);
+    assert.equal(returned.hp, diver.hp);
+    assert.equal(returned.o2, diver.o2);
+    assert.equal(revived.sectors.breach.divers.filter((item) => item.id === ada).length, 1);
+  });
+
+  it("round-trips two reconnecting divers and a shared creature encounter through serialized world recovery", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const bo = ocean.join(null, "Bo");
+    const maw = ocean.sectors.plains.creatures.find((creature) => creature.kind === "maw");
+    assert.ok(maw);
+    ocean.place(ada, "plains", maw.x - 28, maw.y);
+    ocean.place(bo, "plains", maw.x - 44, maw.y + 12);
+
+    const adaDiver = ocean.locate(ada)!.diver;
+    const boDiver = ocean.locate(bo)!.diver;
+    adaDiver.hp = 76;
+    adaDiver.o2 = 41;
+    adaDiver.ammo = 8;
+    adaDiver.cells = 2;
+    boDiver.hp = 49;
+    boDiver.o2 = 33;
+    boDiver.ammo = 13;
+    boDiver.cells = 1;
+    maw.hp = 311;
+    maw.state = "windup";
+    maw.aggro = true;
+
+    const reward = {
+      id: "reward:restart-encounter:123",
+      region: "plains" as const,
+      kind: "med" as const,
+      x: 100,
+      y: 140,
+      amount: 12,
+      reward: true,
+      taken: false,
+    };
+    ocean.sectors.plains.pickups.push(reward);
+    ocean.players.get(ada)!.seen.push("plains-surface");
+    ocean.players.get(bo)!.seen.push("beast:maw");
+    ocean.found.push("plains-surface");
+
+    const beforeRecovery = {
+      ada: ocean.snapshot(ada).you,
+      bo: ocean.snapshot(bo).you,
+      maw: { hp: maw.hp, alive: maw.alive, state: maw.state, x: maw.x, y: maw.y },
+    };
+    const body = JSON.parse(JSON.stringify(ocean.toBody())) as ReturnType<Ocean["toBody"]>;
+    const recovered = Ocean.revive(body);
+
+    assert.equal(recovered.join(ada, "Ada"), ada);
+    assert.equal(recovered.join(bo, "Bo"), bo);
+    assert.equal(recovered.locate(ada)?.region, "plains");
+    assert.equal(recovered.locate(bo)?.region, "plains");
+    assert.deepEqual(recovered.snapshot(ada).you, beforeRecovery.ada);
+    assert.deepEqual(recovered.snapshot(bo).you, beforeRecovery.bo);
+    const recoveredMaw = recovered.sectors.plains.creatures.find((creature) => creature.id === maw.id);
+    assert.ok(recoveredMaw);
+    assert.deepEqual(
+      { hp: recoveredMaw.hp, alive: recoveredMaw.alive, state: recoveredMaw.state, x: recoveredMaw.x, y: recoveredMaw.y },
+      beforeRecovery.maw,
+    );
+    assert.deepEqual(recovered.sectors.plains.pickups.filter((pickup) => pickup.id === reward.id), [reward]);
+    assert.ok(recovered.players.get(ada)?.seen.includes("plains-surface"));
+    assert.ok(recovered.players.get(bo)?.seen.includes("beast:maw"));
+    assert.ok(recovered.found.includes("plains-surface"));
+    assert.equal(recovered.sectors.plains.divers.filter((diver) => diver.id === ada).length, 1);
+    assert.equal(recovered.sectors.plains.divers.filter((diver) => diver.id === bo).length, 1);
   });
 
   it("files the unnamed return without closing the heart", () => {

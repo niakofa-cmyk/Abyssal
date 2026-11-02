@@ -30,6 +30,16 @@ Update this status document as gameplay capabilities change.
 - Low air and exhausted air now produce explicit guidance. The HUD identifies a local oxygen supply or recommends returning to an available working vehicle; survival warnings also cover critical health and depleted reserves.
 - Kills, returned wildlife, shared pickup behavior, local-save migration, sector sleep, and version-one world restoration have focused regression coverage.
 
+## This development increment: adrift divers in active regions
+
+- A diver marked adrift is now excluded from authoritative simulation while remaining present as a recoverable beacon; teammates can continue simulating that same region.
+- Adrift divers no longer move, consume oxygen, take damage, collect supplies, or add discoveries while disconnected.
+- A teammate in the same region cannot prevent the disconnected diver's own return timer from shelving their state.
+- Same-region reconnect-before-shelf, same-region shelf-and-revive, and cross-region activity/shelf-and-revive have automated regression coverage. Recovery assertions include identity, location, health, oxygen, ammunition, energy cells, and no duplicate diver.
+- The server's region-busy check now uses the same adrift-aware activity rule as the simulation, avoiding needless busy-region persistence when only disconnected divers remain.
+- A separate JSON world-body round trip restores two diver identities and resources, the shared Lantern Maw encounter state, a shared reward drop, and personal/shared discoveries without duplicate divers. This simulates serialization and recovery; it is not a Railway worker-restart certification.
+- This is local implementation and automated coverage. No Railway deploy, two-browser live test, or production worker restart was performed for this update.
+
 ## Railway persistence probe — 2026-11-02 UTC
 
 - Confirmed the Railway production service is linked to `niakofa-cmyk/Abyssal` on `main`; the production health endpoint reports PostgreSQL ready.
@@ -71,9 +81,9 @@ walkthrough remains unverified; do not represent the unit/save checks as a compl
 
 ## Next milestones from the reference
 
-1. Publish the idle-shelf persistence fix, then repeat the Railway return probe and certify a real browser return before calling persistence production-proven.
-2. Build a stack-limited diver pack, station storage, and recovery rules without creating resource soft-locks.
-3. Playtest and tune the full first expedition: survival, evidence, vehicle cooperation, and first Maw encounter.
-4. Expand ecological relationships and cooperative responsibilities from observed gameplay.
-5. Expand civilization and campaign content only after those foundations are convincing.
-6. Protect the ascent and surface revelation until the underwater campaign earns it.
+1. Run the same-region lifecycle through two real browser clients on Railway, then certify beacon recovery through a controlled worker restart.
+2. Finish reward-loop communication and collection edge cases before introducing inventory capacity.
+3. Build the 20-slot diver pack and its save/recovery rules; then integrate one save/resupply station and one information station.
+4. Playtest and tune the complete first expedition: survival, evidence, vehicle cooperation, restoration, and the first Maw encounter.
+5. Expand ecological relationships and cooperative responsibilities from observed gameplay.
+6. Expand civilization and campaign content only after those foundations are convincing; protect the ascent and surface revelation.
