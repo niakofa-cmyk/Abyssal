@@ -32,6 +32,30 @@ describe("regional ocean", () => {
     assert.match(adaSnap.toasts[0] ?? "", /east lock/);
   });
 
+  it("restores a shelved diver at the saved position with the same life-support state", () => {
+    const ocean = new Ocean();
+    const token = ocean.join(null, "Persistence Probe");
+    for (let i = 0; i < 12; i += 1) {
+      ocean.setIntent(token, { ax: 1, ay: 0, aimX: 1, aimY: 0, fire: false, use: false, repair: false, cycle: false });
+      ocean.step(1 / 20);
+    }
+    ocean.setIntent(token, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, use: false, repair: false, cycle: false });
+    ocean.step(1 / 20);
+    const saved = ocean.snapshot(token).you;
+    assert.equal(ocean.sweep(Date.now() + 95_001), true, "shelving reports a durable state change");
+    assert.equal(ocean.locate(token), undefined, "an inactive return beacon is shelved");
+    const restoredOcean = Ocean.revive(ocean.toBody());
+    assert.equal(restoredOcean.locate(token), undefined, "the saved diver remains shelved after world reload");
+    assert.equal(restoredOcean.join(token, "Persistence Probe"), token);
+    const returned = restoredOcean.snapshot(token).you;
+    assert.equal(returned.id, saved.id);
+    assert.equal(returned.region, saved.region);
+    assert.ok(Math.abs(returned.x - saved.x) < 0.01);
+    assert.ok(Math.abs(returned.y - saved.y) < 0.01);
+    assert.equal(returned.hp, saved.hp);
+    assert.equal(returned.o2, saved.o2);
+  });
+
   it("files the unnamed return without closing the heart", () => {
     const ocean = new Ocean();
     const ada = ocean.join(null, "Ada");

@@ -678,6 +678,7 @@ export class Ocean {
   }
 
   sweep(now: number) {
+    let changed = false;
     for (const player of [...this.players.values()]) {
       const quiet = now - player.heard;
       if (!player.adrift && !player.stash && quiet > QUIET_MS) {
@@ -694,9 +695,14 @@ export class Ocean {
         }
         player.adrift = true;
         this.toast(player.token, "Signal lost. The beacon keeps your place, and the seat is open.");
+        changed = true;
       }
-      if (quiet > SHELVE_MS && this.locate(player.token)) this.shelve(player.token);
+      if (quiet > SHELVE_MS && this.locate(player.token)) {
+        this.shelve(player.token);
+        changed = true;
+      }
     }
+    return changed;
   }
 
   private liveHere(id: RegionId) {

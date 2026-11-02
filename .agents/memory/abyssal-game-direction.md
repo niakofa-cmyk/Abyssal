@@ -31,6 +31,14 @@ The surface revelation and trench remain future campaign work. The 2.5D recommen
 
 **How to apply:** Describe only verified functionality as complete. A single-client persistence check does not certify multiplayer scale or database recovery. Preserve existing saves and beacon identity when extending the simulation.
 
+## Persisting idle-world transitions
+
+A live Railway return probe preserved beacon, diver identity, region, and health but returned a different position and oxygen level after a 95-second absence. The API requests succeeded, so HTTP 200 alone is not evidence that a resumed dive restored its checkpoint. The server's idle sweep now reports state changes so shelving the final diver is persisted before the simulation timer goes idle; production must be retested after the fix is published.
+
+**Why:** A shelved diver can be absent from active regions, which stops ordinary periodic saves; without an explicit write, another process or a restarted worker can revive an older world body.
+
+**How to apply:** Persist authoritative state changes even when all regions become inactive. Verify position, oxygen, identity, region, and health after both a long idle return and a Railway process/database reload before marking continuity reliable.
+
 ## Reliable panel controls
 
 Handle panel navigation directly on keydown and queue one-shot gameplay actions until consumed; reserve held-key polling for continuous movement.

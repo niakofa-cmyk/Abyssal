@@ -102,8 +102,11 @@ async function ensure(): Promise<Runtime> {
       const now = Date.now();
       const gap = now - rt.last;
       rt.last = now;
-      rt.ocean.sweep(now);
-      if (!REGIONS_BUSY(rt.ocean)) return;
+      const swept = rt.ocean.sweep(now);
+      if (!REGIONS_BUSY(rt.ocean)) {
+        if (swept) await save(rt);
+        return;
+      }
       const steps = Math.max(1, Math.min(3, Math.round(gap / 50)));
       for (let i = 0; i < steps; i += 1) rt.ocean.step(1 / 20);
       if (now - rt.savedAt > 400) {

@@ -30,6 +30,14 @@ Update this status document as gameplay capabilities change.
 - Low air and exhausted air now produce explicit guidance. The HUD identifies a local oxygen supply or recommends returning to an available working vehicle; survival warnings also cover critical health and depleted reserves.
 - Kills, returned wildlife, shared pickup behavior, local-save migration, sector sleep, and version-one world restoration have focused regression coverage.
 
+## Railway persistence probe — 2026-11-02 UTC
+
+- Confirmed the Railway production service is linked to `niakofa-cmyk/Abyssal` on `main`; the production health endpoint reports PostgreSQL ready.
+- A consented 95-second live return probe preserved the test beacon, diver identity, region, and health. It did **not** restore the saved position or oxygen within tolerance, even though the join and sync requests returned HTTP 200.
+- Railway logs for the test window showed successful HTTP responses but no application error that explains the state mismatch. The live result is a failed persistence check, not a certification.
+- The server scheduler had a concrete gap: after shelving the last diver, an idle region could stop the periodic save before the new shelf state reached PostgreSQL. The local fix persists state changed by an idle sweep; a regression test now verifies position and oxygen through `OceanBody` serialization and revival.
+- The fix has not been published to Railway or retested there. The production process was not restarted. The nonpersonal probe diver was left to auto-shelve; no other production record was removed or changed.
+
 ## Still unverified or not implemented
 
 - Unit tests cover serialized restart paths, not a signed-in browser return visit or a live Railway process/database restart. Those end-to-end checks remain mandatory before production reliability is certified.
@@ -62,7 +70,7 @@ walkthrough remains unverified; do not represent the unit/save checks as a compl
 
 ## Next milestones from the reference
 
-1. Certify real browser save/return, two-client shared pickup claims, and a Railway world restart before calling persistence production-proven.
+1. Publish the idle-shelf persistence fix, then repeat the Railway return probe and certify a real browser return before calling persistence production-proven.
 2. Build a stack-limited diver pack, station storage, and recovery rules without creating resource soft-locks.
 3. Playtest and tune the full first expedition: survival, evidence, vehicle cooperation, and first Maw encounter.
 4. Expand ecological relationships and cooperative responsibilities from observed gameplay.
