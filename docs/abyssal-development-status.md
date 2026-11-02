@@ -38,22 +38,21 @@ Update this status document as gameplay capabilities change.
 - Same-region reconnect-before-shelf, same-region shelf-and-revive, and cross-region activity/shelf-and-revive have automated regression coverage. Recovery assertions include identity, location, health, oxygen, ammunition, energy cells, and no duplicate diver.
 - The server's region-busy check now uses the same adrift-aware activity rule as the simulation, avoiding needless busy-region persistence when only disconnected divers remain.
 - A separate JSON world-body round trip restores two diver identities and resources, the shared Lantern Maw encounter state, a shared reward drop, and personal/shared discoveries without duplicate divers. This simulates serialization and recovery; it is not a Railway worker-restart certification.
-- This is local implementation and automated coverage. No Railway deploy, two-browser live test, or production worker restart was performed for this update.
+- This increment is deployed to Railway and has live production API verification below. The checks used isolated beacons through the persistent-ocean HTTP API, not signed-in browser clients.
 
 ## Railway persistence probe — 2026-11-02 UTC
 
-- Confirmed the Railway production service is linked to `niakofa-cmyk/Abyssal` on `main`; the production health endpoint reports PostgreSQL ready.
-- The Railway service is linked to `niakofa-cmyk/Abyssal` on `main`, configured for one replica, and reports PostgreSQL ready.
-- A controlled 95-second production return preserved the beacon, diver identity, region, and health. Position differed from the last pre-idle sync by 42.093 units and oxygen by 39.38, but Railway logs confirmed the inactivity sweep marked the diver adrift, shelved it, and persisted the shelf state before the return.
-- The test window contained only the probe's requests; no other `/api/ocean` requests occurred during the idle period. A local 50 ms scheduler replay with the game's nine-second disconnect grace reproduced the same position and oxygen deltas exactly. The difference is expected simulation during that grace, not evidence of lost shelf data.
-- The test now checks that a rejoined diver exactly matches the state captured when shelved, after the grace period, rather than comparing it to the earlier last-sync snapshot. This validates the meaningful persistence invariant.
-- The diagnostic build is live, health is 200 with PostgreSQL ready, and its logs contain only transition counts and persistence outcomes—not player identifiers or coordinates. Test beacons are left to auto-shelve; no existing production record was removed or changed.
+- Railway deployed commit `a0d3b6e9c8769f8754d7cd71fa527934a844a60c` from `main`; deployment succeeded in `us-east4-eqdc4a`. `/api/health` returned HTTP 200 with PostgreSQL ready.
+- A two-beacon production API check kept the Breach active with one diver while the other went adrift. The adrift diver's identity, position, health, oxygen, ammunition, and cells stayed unchanged; reconnecting the same beacon restored that exact state with one roster entry.
+- A separate 95-second API probe observed the inactivity sweep shelf a beacon and persist the idle state. Rejoining with the same beacon succeeded. This run did not retain a pre-shelf field-by-field snapshot, so it verifies the shelf/return path, not exact field equality after the shelf.
+- A controlled restart of the Railway web service completed without restarting PostgreSQL. Afterward, both test beacon IDs, regions, positions, ammunition, and cells were restored without duplicate roster entries. Health and oxygen differed because those test divers were near or at death and the game applied its respawn behavior; healthy-resource continuity across a process restart is not certified by that run.
+- Railway logs recorded adrift/shelf transitions and successful persistence using aggregate counts, not player identifiers or coordinates. All probes used synthetic test beacons; no existing production record was deleted or intentionally modified.
 
 ## Still unverified or not implemented
 
-- Unit tests cover serialized restart paths, not a signed-in browser return visit or a live Railway process/database restart. Those end-to-end checks remain mandatory before production reliability is certified.
+- No signed-in browser-client return test or two-browser session was run; production checks used the persistent-ocean HTTP API.
+- No PostgreSQL service restart, database disaster-recovery test, multiplayer load test, or multiplayer capacity certification has run. The web-service restart did not certify healthy health/oxygen continuity.
 - No 20-slot stackable diver pack, separated station storage, new dedicated save/info station service, or redesigned full-death recovery loop has been added. Existing resource counters and respawn behavior remain.
-- No multiplayer load/capacity test or database disaster-recovery exercise has run.
 - No new regions, species, or surface/trench campaign destinations have been added.
 
 ## What this does not claim
