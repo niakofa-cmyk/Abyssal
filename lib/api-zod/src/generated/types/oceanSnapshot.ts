@@ -7,12 +7,15 @@
  */
 import type { DiverView } from './diverView';
 import type { OceanSnapshotCreaturesItem } from './oceanSnapshotCreaturesItem';
+import type { OceanSnapshotDropsItem } from './oceanSnapshotDropsItem';
 import type { OceanSnapshotVehiclesItem } from './oceanSnapshotVehiclesItem';
 import type { RegionEcology } from './regionEcology';
 import type { SectorReport } from './sectorReport';
 
 export interface OceanSnapshot {
   ecology?: RegionEcology;
+  /** @maxItems 64 */
+  drops?: OceanSnapshotDropsItem[];
   time: number;
   you: DiverView;
   roster: SectorReport[];

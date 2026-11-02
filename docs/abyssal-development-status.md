@@ -2,8 +2,9 @@
 
 ## Source reference
 
-[The user's supplied game assessment](abyssal-build-reference.md) is preserved verbatim.
-Its progress percentages are subjective estimates, not measured project completion.
+[The original build reference](abyssal-build-reference.md) and the later
+[repository evaluation](abyssal-updated-repository-evaluation.md) are preserved verbatim.
+Their progress estimates are guidance, not measured completion.
 Update this status document as gameplay capabilities change.
 
 ## This development increment: Living Ocean foundation
@@ -19,6 +20,22 @@ Update this status document as gameplay capabilities change.
 - Older saves without ecology fields load as unchanged districts; no database replacement or destructive migration is required.
 - Empty sectors retain their memory but do not advance ecological events. This is an occupied-sector simulation, not continuous simulation of the entire ocean while offline.
 - The first-expedition guidance now points toward the black-box evidence and explains optional grid restoration without preventing travel onward.
+
+## This development increment: shared rewards and recovery
+
+- An authoritative creature defeat can create a sparse, deterministic physical supply drop. Ordinary creatures have distinct tables; Maw stays a campaign-specific encounter and sentries do not respawn.
+- A dropped supply is one shared world object, not per-client loot. It stays visible until collected; full or near-full resources do not erase it, and partial pickup preserves its remainder.
+- Drops flow through local saves, authoritative ocean bodies, live sector snapshots, and the experimental frequency snapshot. Old local saves and version-one ocean bodies remain readable.
+- Darter, eel, hunter, and bloom return only after their sector has been active long enough, local disturbance is low, and divers are not close to their territory. Sleeping regions do not spend the cooldown.
+- Low air and exhausted air now produce explicit guidance. The HUD identifies a local oxygen supply or recommends returning to an available working vehicle; survival warnings also cover critical health and depleted reserves.
+- Kills, returned wildlife, shared pickup behavior, local-save migration, sector sleep, and version-one world restoration have focused regression coverage.
+
+## Still unverified or not implemented
+
+- Unit tests cover serialized restart paths, not a signed-in browser return visit or a live Railway process/database restart. Those end-to-end checks remain mandatory before production reliability is certified.
+- No 20-slot stackable diver pack, separated station storage, new dedicated save/info station service, or redesigned full-death recovery loop has been added. Existing resource counters and respawn behavior remain.
+- No multiplayer load/capacity test or database disaster-recovery exercise has run.
+- No new regions, species, or surface/trench campaign destinations have been added.
 
 ## What this does not claim
 
@@ -45,9 +62,9 @@ walkthrough remains unverified; do not represent the unit/save checks as a compl
 
 ## Next milestones from the reference
 
-1. Playtest and tune the first complete expedition: catastrophe, survival, evidence, vehicle cooperation, and first Maw encounter.
-2. Expand ecological relationships and persistent consequences using observed gameplay, not random encounter spam.
-3. Develop cooperative power, sonar, research, and external repair responsibilities.
-4. Certify multi-client persistence, restart behavior, contention, and database recovery.
+1. Certify real browser save/return, two-client shared pickup claims, and a Railway world restart before calling persistence production-proven.
+2. Build a stack-limited diver pack, station storage, and recovery rules without creating resource soft-locks.
+3. Playtest and tune the full first expedition: survival, evidence, vehicle cooperation, and first Maw encounter.
+4. Expand ecological relationships and cooperative responsibilities from observed gameplay.
 5. Expand civilization and campaign content only after those foundations are convincing.
 6. Protect the ascent and surface revelation until the underwater campaign earns it.

@@ -10,6 +10,7 @@ import {
 import { TILE, ZONES, type Facing, type Projectile, type RegionId, type Seat, type Sim, type Vehicle } from "./types.ts";
 import { casesClosedBy } from "./archive.ts";
 import { ECOLOGY_EVENTS, reviveEcology, type RegionEcology } from "./ecology.ts";
+import { reviveRewardDrops } from "./rewards.ts";
 
 export const REGIONS: RegionId[] = ["breach", "plains", "city", "works", "reef"];
 
@@ -75,6 +76,8 @@ export type OceanSnap = {
     aimX: number;
     aimY: number;
     aggro: boolean;
+    timer: number;
+    lastHurtBy: string | null;
   }>;
   vehicles: Array<{
     id: string;
@@ -96,6 +99,8 @@ export type OceanSnap = {
   hullWhere: { id: string; region: RegionId; destroyed: boolean }[];
   projectiles: Array<Pick<Projectile, "id" | "region" | "x" | "y" | "vx" | "vy" | "life" | "kind" | "team">>;
   taken: string[];
+  /** Current-region creature rewards, shared once across every diver. */
+  drops?: Sim["pickups"];
   toasts: string[];
   events: string[];
   seen: string[];
@@ -146,11 +151,11 @@ type DiverSave = DiverView & {
 };
 
 export type OceanBody = {
-  v: 1;
+  v: 1 | 2;
   flags: Sim["flags"];
   sectors: Record<
     RegionId,
-    { time: number; ecology?: RegionEcology; creatures: CreatureSave[]; vehicles: VehicleSave[]; taken: string[]; projectiles: OceanSnap["projectiles"] }
+    { time: number; ecology?: RegionEcology; creatures: CreatureSave[]; vehicles: VehicleSave[]; taken: string[]; drops?: Sim["pickups"]; projectiles: OceanSnap["projectiles"] }
   >;
   divers: DiverSave[];
   found?: string[];
@@ -360,6 +365,14 @@ export class Ocean {
           if (!player) continue;
           player.pending.push(event);
           if (player.pending.length > 24) player.pending.splice(0, player.pending.length - 24);
+          if (event === "reward") this.toast(diver.id, "A shared supply is adrift where the creature fell.");
+          else if (event.startsWith("returned:")) {
+            this.toast(diver.id, `The ${event.slice("returned:".length)} has returned to its territory.`);
+          } else if (event === `air-low:${diver.id}`) {
+            this.toast(diver.id, "Oxygen low. Find a refill or return to a working vehicle.");
+          } else if (event === `air-empty:${diver.id}`) {
+            this.toast(diver.id, "Air exhausted. Return to a working vehicle or find an oxygen cache now.");
+          }
         }
       }
       for (const diver of sim.divers) {
@@ -398,6 +411,8 @@ export class Ocean {
         aimX: c.aimX,
         aimY: c.aimY,
         aggro: c.aggro,
+        timer: c.timer,
+        lastHurtBy: c.lastHurtBy,
       })),
       vehicles: sim.vehicles.map((v) => ({
         id: v.id,
@@ -431,6 +446,7 @@ export class Ocean {
         team: p.team,
       })),
       taken: sim.pickups.filter((p) => p.taken).map((p) => p.id),
+      drops: sim.pickups.filter((p) => p.reward && p.region === diver.region).map((p) => ({ ...p })),
       toasts: player.toasts.map((c) => c.text),
       events,
       seen: player.seen,
@@ -473,6 +489,7 @@ export class Ocean {
       sectors[id] = {
         time: sim.time,
         ecology: reviveEcology(sim.ecology[id]),
+        drops: sim.pickups.filter((pickup) => pickup.reward).map((pickup) => ({ ...pickup })),
         creatures: sim.creatures.map((c) => ({
           id: c.id,
           region: c.region,
@@ -491,6 +508,7 @@ export class Ocean {
           timer: c.timer,
           hurt: c.hurt,
           didHit: c.didHit,
+          lastHurtBy: c.lastHurtBy,
         })),
         vehicles: sim.vehicles.map((v) => ({
           id: v.id,
@@ -538,7 +556,7 @@ export class Ocean {
       }
     }
     return {
-      v: 1,
+      v: 2,
       flags: { ...this.flags },
       sectors,
       divers,
@@ -555,7 +573,7 @@ export class Ocean {
 
   static revive(body: OceanBody): Ocean {
     const ocean = new Ocean();
-    if (body?.v !== 1 || !body.sectors || !body.flags) return ocean;
+    if ((body?.v !== 1 && body?.v !== 2) || !body.sectors || !body.flags) return ocean;
     ocean.flags = { ...ocean.flags, ...body.flags };
     const found = new Set<string>(Array.isArray(body.found) ? body.found : []);
     for (const player of body.players ?? []) {
@@ -568,6 +586,8 @@ export class Ocean {
       if (!saved) continue;
       sim.time = saved.time || 0;
       sim.ecology[id] = reviveEcology(saved.ecology);
+      sim.pickups = sim.pickups.filter((pickup) => !pickup.reward);
+      sim.pickups.push(...reviveRewardDrops(saved.drops, sim.regions));
       for (const c of saved.creatures ?? []) {
         const local = sim.creatures.find((item) => item.id === c.id);
         if (!local) continue;
@@ -585,6 +605,7 @@ export class Ocean {
         local.timer = c.timer ?? 0;
         local.hurt = c.hurt ?? 0;
         local.didHit = !!c.didHit;
+        local.lastHurtBy = c.lastHurtBy ?? null;
         local.netX = c.x;
         local.netY = c.y;
       }
@@ -916,6 +937,10 @@ export function applyOceanView(sim: Sim, selfId: string, snap: OceanSnap) {
   sim.flags = { ...snap.flags };
   sim.discovered = [...snap.seen];
   sim.shared = [...(snap.found ?? [])];
+  if (Array.isArray(snap.drops)) {
+    sim.pickups = sim.pickups.filter((pickup) => !pickup.reward || pickup.region !== snap.you.region);
+    sim.pickups.push(...reviveRewardDrops(snap.drops, sim.regions));
+  }
   for (const id of REGIONS) {
     const incoming = snap.explored[id];
     if (!incoming) continue;
@@ -951,6 +976,8 @@ export function applyOceanView(sim: Sim, selfId: string, snap: OceanSnap) {
     creature.vx = saved.vx;
     creature.vy = saved.vy;
     creature.aggro = saved.aggro;
+    creature.timer = Number.isFinite(saved.timer) ? saved.timer : creature.timer;
+    creature.lastHurtBy = saved.lastHurtBy ?? null;
   }
   for (const where of snap.hullWhere) {
     const vehicle = sim.vehicles.find((item) => item.id === where.id);

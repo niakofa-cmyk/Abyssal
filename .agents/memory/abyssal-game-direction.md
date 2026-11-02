@@ -11,11 +11,17 @@ The user designated `docs/abyssal-build-reference.md` as a continuing reference 
 
 ## Product direction
 
-Prioritize a polished first expedition and a Living Ocean: meaningful environmental consequences, readable creature behavior, shared regional history, and discovery-led storytelling. Preserve personal versus shared historical evidence.
+The latest repository assessment is preserved alongside the original build reference in `docs/abyssal-updated-repository-evaluation.md`.
+
+**Why:** The user supplied a later evaluation and asked that it be saved, used to guide implementation, and kept as a reference.
+
+**How to apply:** Treat this evaluation as the current milestone order, not as proof that recommended systems already exist. Keep the earlier creative pitch as a separate reference.
+
+Prioritize a certified persistent cooperative expedition and Living Ocean: first verify the survival, save, and multiplayer foundations, then add bounded rewards, inventory, and ecology recovery. Preserve personal versus shared historical evidence.
 
 **Why:** The reference's central recommendation is: “Do not build Abyssal to compete on the size of its ocean. Build it to compete on how alive its ocean feels.”
 
-**How to apply:** Prefer a complete, observable interaction in the existing regions over adding many regions, creatures, or vehicles. Make consequences visible to players and persistent where appropriate.
+**How to apply:** Build complete, observable systems in the existing regions before adding new regions, creatures, or vehicles. Make rewards and consequences visible, server-authoritative, bounded against exploitation, and persistent in the correct personal or shared scope.
 
 ## Scope and proof
 

@@ -3,8 +3,9 @@ import { test } from "node:test";
 import { advanceEcology, createEcology, emitNoise, restorePower, reviveEcology } from "./ecology.ts";
 import { Ocean, applyOceanView } from "./ocean.ts";
 import { applyGrant, applyOwn, createSim, exportWorld, importWorld, pressUse, stepSim } from "./sim.ts";
-import { applySave, writeSave } from "./persist.ts";
+import { applySave, loadSave, writeSave } from "./persist.ts";
 import { consumeActionEdge, queueActionKey } from "./input.ts";
+import { CREATURE_RESPAWN_RULES, rewardForDefeat } from "./rewards.ts";
 
 const intent = { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false };
 const fresh = () => createSim({ selfId: "test", name: "Researcher", partner: false, soren: false });
@@ -217,16 +218,153 @@ test("local frequency saves retain regional consequences and old saves remain lo
   try {
     const sim = fresh();
     restorePower(sim.ecology.breach, 100, 100);
+    const reward = {
+      id: "reward:test-hunter:60",
+      region: "breach" as const,
+      kind: "ammo" as const,
+      x: 100,
+      y: 120,
+      amount: 4,
+      reward: true,
+      taken: false,
+    };
+    sim.pickups.push(reward);
     writeSave(sim, "test");
     const saved = JSON.parse(records.get("abyssal-save-v1")!);
+    assert.equal(saved.version, 2);
+    assert.deepEqual(saved.drops, [reward]);
     const resumed = fresh();
     applySave(resumed, "test", saved);
     assert.equal(resumed.ecology.breach.powered, true);
+    assert.deepEqual(resumed.pickups.filter((pickup) => pickup.reward), [reward]);
     delete saved.ecology;
     applySave(resumed, "test", saved);
     assert.equal(resumed.ecology.breach.powered, false);
+    const oldSave = structuredClone(saved);
+    oldSave.version = 1;
+    delete oldSave.drops;
+    for (const creature of oldSave.creatures) {
+      delete creature.timer;
+      delete creature.lastHurtBy;
+    }
+    records.set("abyssal-save-v1", JSON.stringify(oldSave));
+    const migrated = loadSave();
+    assert.equal(migrated?.version, 2);
+    assert.deepEqual(migrated?.drops, []);
   } finally {
     if (oldStorage) Object.defineProperty(globalThis, "localStorage", { configurable: true, value: oldStorage });
     else Reflect.deleteProperty(globalThis, "localStorage");
   }
+});
+
+test("creature rewards are deterministic, bounded, and exclude permanent campaign encounters", () => {
+  for (const kind of ["darter", "eel", "hunter", "sentry", "bloom"] as const) {
+    let found = 0;
+    for (let i = 0; i < 1_000; i++) {
+      const id = `${kind}-${i}`;
+      const time = i / 60;
+      const first = rewardForDefeat(kind, id, time);
+      assert.deepEqual(rewardForDefeat(kind, id, time), first);
+      if (first) {
+        found++;
+        assert.ok(first.amount >= 1 && first.amount <= 64);
+      }
+    }
+    assert.ok(found > 50 && found < 1_000, `${kind} rewards should be sparse, but possible`);
+  }
+  assert.equal(rewardForDefeat("maw", "plains-maw", 10), null);
+  assert.equal(CREATURE_RESPAWN_RULES.sentry, undefined);
+  assert.equal(CREATURE_RESPAWN_RULES.maw, undefined);
+});
+
+test("an authoritative defeat creates one shared supply that survives world snapshots", () => {
+  const sim = fresh();
+  const creature = sim.creatures.find((candidate) => candidate.kind === "hunter");
+  assert.ok(creature);
+  let rewardedId = "";
+  for (let index = 0; index < 2_000; index++) {
+    const candidateId = `test-hunter-${index}`;
+    if (rewardForDefeat("hunter", candidateId, 1 / 60)) {
+      rewardedId = candidateId;
+      creature.id = candidateId;
+      break;
+    }
+  }
+  assert.ok(rewardedId, "find a creature identity with a deterministic drop");
+  sim.divers = [];
+  sim.time = 0;
+  creature.hp = 1;
+  sim.projectiles.push({
+    id: 1,
+    region: creature.region,
+    x: creature.x - 2,
+    y: creature.y,
+    vx: 0,
+    vy: 0,
+    life: 1,
+    dmg: 10,
+    team: "crew",
+    ownerId: "test",
+    kind: "harpoon",
+    hw: 6,
+    hh: 6,
+  });
+  stepSim(sim, 1 / 60, true, "test");
+  assert.equal(creature.alive, false);
+  assert.equal(creature.lastHurtBy, "test");
+  const drop = sim.pickups.find((pickup) => pickup.reward);
+  assert.ok(drop);
+  assert.equal(drop.region, creature.region);
+  assert.deepEqual(rewardForDefeat("hunter", creature.id, sim.time), { kind: drop.kind, amount: drop.amount });
+
+  const echo = fresh();
+  importWorld(echo, exportWorld(sim), "test");
+  assert.deepEqual(echo.pickups.filter((pickup) => pickup.reward), [drop]);
+  importWorld(echo, exportWorld(sim), "test");
+  assert.equal(echo.pickups.filter((pickup) => pickup.reward).length, 1);
+});
+
+test("ordinary wildlife returns only after its active-sector cooldown and quiet checks", () => {
+  const sim = fresh();
+  const creature = sim.creatures.find((candidate) => CREATURE_RESPAWN_RULES[candidate.kind]);
+  assert.ok(creature);
+  const diver = sim.divers[0];
+  diver.region = creature.region;
+  diver.x = creature.homeX + 700;
+  diver.y = creature.homeY + 700;
+  creature.alive = false;
+  creature.hp = 0;
+  creature.state = "down";
+  creature.timer = 0.01;
+  sim.ecology[creature.region].noise = 80;
+  stepSim(sim, 1 / 60, true, diver.id);
+  assert.equal(creature.alive, false);
+  assert.equal(creature.timer, 4);
+
+  sim.ecology[creature.region].noise = 0;
+  creature.timer = 0.01;
+  stepSim(sim, 1 / 60, true, diver.id);
+  assert.equal(creature.alive, true);
+  assert.equal(creature.hp, creature.hpMax);
+  assert.equal(creature.lastHurtBy, null);
+
+  creature.alive = false;
+  creature.hp = 0;
+  creature.timer = 0.01;
+  diver.x = creature.homeX;
+  diver.y = creature.homeY;
+  stepSim(sim, 1 / 60, true, diver.id);
+  assert.equal(creature.alive, false, "nearby divers delay a territorial respawn");
+  assert.equal(creature.timer, 4);
+
+  diver.x = creature.homeX + 700;
+  diver.y = creature.homeY + 700;
+  creature.timer = 0.01;
+  stepSim(sim, 1 / 60, true, diver.id);
+  assert.equal(creature.alive, true);
+  creature.alive = false;
+  creature.timer = 50;
+  diver.region = creature.region === "breach" ? "plains" : "breach";
+  stepSim(sim, 1 / 20, true, diver.id);
+  assert.equal(creature.timer, 50, "sleeping regions do not age their creatures");
 });

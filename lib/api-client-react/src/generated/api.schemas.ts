@@ -167,6 +167,42 @@ export interface RegionEcology {
   events: EcologyEvent[];
 }
 
+export type OceanSnapshotDropsItemRegion = typeof OceanSnapshotDropsItemRegion[keyof typeof OceanSnapshotDropsItemRegion];
+
+
+export const OceanSnapshotDropsItemRegion = {
+  breach: 'breach',
+  plains: 'plains',
+  city: 'city',
+  works: 'works',
+  reef: 'reef',
+} as const;
+
+export type OceanSnapshotDropsItemKind = typeof OceanSnapshotDropsItemKind[keyof typeof OceanSnapshotDropsItemKind];
+
+
+export const OceanSnapshotDropsItemKind = {
+  o2: 'o2',
+  med: 'med',
+  ammo: 'ammo',
+  cell: 'cell',
+} as const;
+
+export type OceanSnapshotDropsItem = {
+  id: string;
+  region: OceanSnapshotDropsItemRegion;
+  kind: OceanSnapshotDropsItemKind;
+  x: number;
+  y: number;
+  /**
+     * @minimum 1
+     * @maximum 64
+     */
+  amount: number;
+  reward: true;
+  taken: boolean;
+};
+
 export type OceanSnapshotCreaturesItemRegion = typeof OceanSnapshotCreaturesItemRegion[keyof typeof OceanSnapshotCreaturesItemRegion];
 
 
@@ -188,6 +224,9 @@ export type OceanSnapshotCreaturesItem = {
   alive: boolean;
   state?: string;
   aggro?: boolean;
+  timer?: number;
+  /** @nullable */
+  lastHurtBy?: string | null;
 };
 
 export type OceanSnapshotVehiclesItemRegion = typeof OceanSnapshotVehiclesItemRegion[keyof typeof OceanSnapshotVehiclesItemRegion];
@@ -219,6 +258,8 @@ export type OceanSnapshotVehiclesItem = {
 
 export interface OceanSnapshot {
   ecology?: RegionEcology;
+  /** @maxItems 64 */
+  drops?: OceanSnapshotDropsItem[];
   time: number;
   you: DiverView;
   roster: SectorReport[];

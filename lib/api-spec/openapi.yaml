@@ -280,6 +280,34 @@ components:
       properties:
         ecology:
           $ref: "#/components/schemas/RegionEcology"
+        drops:
+          type: array
+          maxItems: 64
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              region:
+                type: string
+                enum: [breach, plains, city, works, reef]
+              kind:
+                type: string
+                enum: [o2, med, ammo, cell]
+              x:
+                type: number
+              y:
+                type: number
+              amount:
+                type: integer
+                minimum: 1
+                maximum: 64
+              reward:
+                type: boolean
+                enum: [true]
+              taken:
+                type: boolean
+            required: [id, region, kind, x, y, amount, reward, taken]
         time:
           type: number
         you:
@@ -316,6 +344,11 @@ components:
                 type: string
               aggro:
                 type: boolean
+              timer:
+                type: number
+              lastHurtBy:
+                type: string
+                nullable: true
             required: [id, region, x, y, alive]
         vehicles:
           type: array

@@ -222,6 +222,21 @@ export function drawSea(
     const frame = pickup.kind === "o2" ? 0 : pickup.kind === "med" ? 1 : pickup.kind === "ammo" ? 2 : 0;
     const bob = Math.sin(sim.time * 2 + pickup.x) * 2;
     blit(ctx, art.props, 2, 2, frame, p.x, p.y + bob, 28, 28, false);
+    if (pickup.reward) {
+      ctx.save();
+      const tint = pickup.kind === "med" ? "#f2b4a0" : pickup.kind === "cell" ? "#f2d180" : "#8cf1d4";
+      ctx.strokeStyle = tint;
+      ctx.fillStyle = tint;
+      ctx.globalAlpha = 0.88;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y + bob, 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText(`+${pickup.amount ?? 1}`, p.x, p.y + bob - 18);
+      ctx.restore();
+    }
   }
 
   for (const vehicle of sim.vehicles) {

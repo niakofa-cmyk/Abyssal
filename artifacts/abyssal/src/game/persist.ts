@@ -1,5 +1,6 @@
-import type { RegionId, Sim } from "./types";
+import type { Pickup, RegionId, Sim } from "./types";
 import { createEcology, type Ecology } from "./ecology.ts";
+import { CREATURE_RESPAWN_RULES, reviveRewardDrops } from "./rewards.ts";
 
 const PROFILE = "abyssal-profile-v2";
 const LEGACY_PROFILE = "abyssal-profile-v1";
@@ -15,7 +16,7 @@ export type Profile = {
 };
 
 export type SaveFile = {
-  version: 1;
+  version: 2;
   ecology?: Ecology;
   time: number;
   you: { region: RegionId; x: number; y: number; hp: number; o2: number; ammo: number; cells: number };
@@ -24,7 +25,8 @@ export type SaveFile = {
   flags: Sim["flags"];
   taken: string[];
   vehicles: { id: string; hull: number; energy: number; destroyed: boolean; region: RegionId; x: number; y: number }[];
-  creatures: { id: string; hp: number; alive: boolean; x: number; y: number }[];
+  creatures: { id: string; hp: number; alive: boolean; x: number; y: number; timer?: number; lastHurtBy?: string | null }[];
+  drops?: Pickup[];
 };
 
 export function loadProfile(): Profile {
@@ -71,9 +73,11 @@ export function loadSave(): SaveFile | null {
   try {
     const raw = localStorage.getItem(SAVE);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SaveFile;
-    if (parsed.version !== 1) return null;
-    return parsed;
+    const parsed = JSON.parse(raw) as Omit<Partial<SaveFile>, "version"> & { version?: number };
+    if ((parsed.version !== 1 && parsed.version !== 2) || !parsed.you || !Number.isFinite(parsed.time) ||
+        !Array.isArray(parsed.creatures) || !Array.isArray(parsed.vehicles) ||
+        !Array.isArray(parsed.discovered) || !Array.isArray(parsed.taken) || !parsed.flags || !parsed.explored) return null;
+    return { ...parsed, version: 2, drops: Array.isArray(parsed.drops) ? parsed.drops : [] } as SaveFile;
   } catch {
     return null;
   }
@@ -83,7 +87,7 @@ export function writeSave(sim: Sim, selfId: string) {
   const you = sim.divers.find((d) => d.id === selfId);
   if (!you) return;
   const file: SaveFile = {
-    version: 1,
+    version: 2,
     time: sim.time,
     you: {
       region: you.region,
@@ -114,7 +118,10 @@ export function writeSave(sim: Sim, selfId: string) {
       alive: c.alive,
       x: c.x,
       y: c.y,
+      timer: c.timer,
+      lastHurtBy: c.lastHurtBy,
     })),
+    drops: sim.pickups.filter((pickup) => pickup.reward).map((pickup) => ({ ...pickup })),
   };
   localStorage.setItem(SAVE, JSON.stringify(file));
 }
@@ -126,6 +133,8 @@ export function clearSave() {
 export function applySave(sim: Sim, selfId: string, file: SaveFile) {
   sim.time = file.time;
   sim.ecology = createEcology(file.ecology);
+  sim.pickups = sim.pickups.filter((pickup) => !pickup.reward);
+  sim.pickups.push(...reviveRewardDrops(file.drops, sim.regions));
   sim.discovered = [...file.discovered];
   sim.flags = { ...sim.flags, ...file.flags };
   for (const id of Object.keys(sim.explored) as RegionId[]) {
@@ -160,6 +169,8 @@ export function applySave(sim: Sim, selfId: string, file: SaveFile) {
     c.y = snap.y;
     c.netX = snap.x;
     c.netY = snap.y;
+    c.timer = Number.isFinite(snap.timer) ? snap.timer! : c.alive ? c.timer : CREATURE_RESPAWN_RULES[c.kind]?.cooldown ?? 0;
+    c.lastHurtBy = snap.lastHurtBy ?? null;
   }
   const you = sim.divers.find((d) => d.id === selfId);
   if (!you) return;

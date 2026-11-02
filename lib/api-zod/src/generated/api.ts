@@ -29,6 +29,10 @@ export const getOceanRosterResponseSnapEcologyNoiseMax = 100;
 
 export const getOceanRosterResponseSnapEcologyEventsMax = 8;
 
+export const getOceanRosterResponseSnapDropsItemAmountMax = 64;
+
+export const getOceanRosterResponseSnapDropsMax = 64;
+
 
 
 export const GetOceanRosterResponse = zod.object({
@@ -55,6 +59,16 @@ export const GetOceanRosterResponse = zod.object({
   "at": zod.number().describe('Occupied-sector simulation time in seconds, not wall-clock time.')
 })).max(getOceanRosterResponseSnapEcologyEventsMax)
 }).optional(),
+  "drops": zod.array(zod.object({
+  "id": zod.string(),
+  "region": zod.enum(['breach', 'plains', 'city', 'works', 'reef']),
+  "kind": zod.enum(['o2', 'med', 'ammo', 'cell']),
+  "x": zod.number(),
+  "y": zod.number(),
+  "amount": zod.number().int().min(1).max(getOceanRosterResponseSnapDropsItemAmountMax),
+  "reward": zod.literal(true),
+  "taken": zod.boolean()
+})).max(getOceanRosterResponseSnapDropsMax).optional(),
   "time": zod.number(),
   "you": zod.object({
   "id": zod.string(),
@@ -120,7 +134,9 @@ export const GetOceanRosterResponse = zod.object({
   "hpMax": zod.number().optional(),
   "alive": zod.boolean(),
   "state": zod.string().optional(),
-  "aggro": zod.boolean().optional()
+  "aggro": zod.boolean().optional(),
+  "timer": zod.number().optional(),
+  "lastHurtBy": zod.string().nullish()
 })).optional(),
   "vehicles": zod.array(zod.object({
   "id": zod.string(),
@@ -208,6 +224,10 @@ export const oceanActionResponseSnapEcologyNoiseMax = 100;
 
 export const oceanActionResponseSnapEcologyEventsMax = 8;
 
+export const oceanActionResponseSnapDropsItemAmountMax = 64;
+
+export const oceanActionResponseSnapDropsMax = 64;
+
 
 
 export const OceanActionResponse = zod.object({
@@ -234,6 +254,16 @@ export const OceanActionResponse = zod.object({
   "at": zod.number().describe('Occupied-sector simulation time in seconds, not wall-clock time.')
 })).max(oceanActionResponseSnapEcologyEventsMax)
 }).optional(),
+  "drops": zod.array(zod.object({
+  "id": zod.string(),
+  "region": zod.enum(['breach', 'plains', 'city', 'works', 'reef']),
+  "kind": zod.enum(['o2', 'med', 'ammo', 'cell']),
+  "x": zod.number(),
+  "y": zod.number(),
+  "amount": zod.number().int().min(1).max(oceanActionResponseSnapDropsItemAmountMax),
+  "reward": zod.literal(true),
+  "taken": zod.boolean()
+})).max(oceanActionResponseSnapDropsMax).optional(),
   "time": zod.number(),
   "you": zod.object({
   "id": zod.string(),
@@ -299,7 +329,9 @@ export const OceanActionResponse = zod.object({
   "hpMax": zod.number().optional(),
   "alive": zod.boolean(),
   "state": zod.string().optional(),
-  "aggro": zod.boolean().optional()
+  "aggro": zod.boolean().optional(),
+  "timer": zod.number().optional(),
+  "lastHurtBy": zod.string().nullish()
 })).optional(),
   "vehicles": zod.array(zod.object({
   "id": zod.string(),

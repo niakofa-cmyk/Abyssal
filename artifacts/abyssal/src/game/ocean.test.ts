@@ -208,13 +208,31 @@ describe("regional ocean", () => {
     assert.equal(scooter.seats.pilot, ada);
     ocean.sweep(Date.now() + 120_000);
     assert.equal(ocean.locate(ada), undefined);
+    const reward = {
+      id: "reward:remaining-hunter:60",
+      region: "breach" as const,
+      kind: "ammo" as const,
+      x: 100,
+      y: 200,
+      amount: 4,
+      reward: true,
+      taken: false,
+    };
+    ocean.sectors.breach.pickups.push(reward);
     const body = ocean.toBody();
+    assert.equal(body.v, 2);
+    assert.deepEqual(body.sectors.breach.drops, [reward]);
     assert.equal(body.players.find((player) => player.token === ada)?.stash?.hp, 55);
     const revived = Ocean.revive(body);
+    assert.deepEqual(revived.sectors.breach.pickups.filter((pickup) => pickup.reward), [reward]);
     assert.equal(revived.locate(ada), undefined);
     assert.equal(revived.join(ada, "Ada"), ada);
     assert.equal(revived.locate(ada)?.diver.hp, 55);
     assert.equal(revived.sectors.breach.divers.filter((diver) => diver.id === ada).length, 1);
+    const legacy = structuredClone(body);
+    legacy.v = 1;
+    delete legacy.sectors.breach.drops;
+    assert.deepEqual(Ocean.revive(legacy).sectors.breach.pickups.filter((pickup) => pickup.reward), []);
   });
 
   it("carries both kite seats through a gate without waking the city", () => {

@@ -218,6 +218,7 @@ function diverCreature(
     aimY: 0,
     didHit: false,
     aggro: false,
+    lastHurtBy: null,
     netX: x,
     netY: y,
   };

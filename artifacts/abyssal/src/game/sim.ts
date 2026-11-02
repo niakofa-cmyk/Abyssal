@@ -17,6 +17,7 @@ import { TILE } from "./types.ts";
 import { isSolid, tileAt, buildLayout } from "./world.ts";
 import { casesClosedBy } from "./archive.ts";
 import { advanceEcology, createEcology, emitNoise, restorePower, ECOLOGY_EVENTS } from "./ecology.ts";
+import { CREATURE_RESPAWN_RULES, MAX_REWARD_DROPS, rewardForDefeat, reviveRewardDrops } from "./rewards.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -156,7 +157,10 @@ export function createSim(opts: SpawnOpts): Sim {
     regions: layout.regions,
     divers,
     vehicles: layout.vehicles,
-    creatures: layout.creatures,
+    creatures: layout.creatures.map((creature) => ({
+      ...creature,
+      lastHurtBy: creature.lastHurtBy ?? null,
+    })),
     projectiles: [],
     pickups: layout.pickups,
     markers: layout.markers,
@@ -556,7 +560,38 @@ function stepBloom(sim: Sim, c: Creature, foe: Diver | undefined, dt: number) {
 }
 
 function stepCreature(sim: Sim, c: Creature, dt: number) {
-  if (!c.alive) return;
+  if (!c.alive) {
+    const rule = CREATURE_RESPAWN_RULES[c.kind];
+    if (!rule || sim.flags.mawDead && c.kind === "maw") return;
+    c.timer = Math.max(0, c.timer - dt);
+    if (c.timer > 0) return;
+    const samePopulation = sim.creatures.filter((creature) => creature.region === c.region && creature.kind === c.kind);
+    const living = samePopulation.filter((creature) => creature.alive && creature.id !== c.id);
+    const threatened = sim.divers.some(
+      (diver) => diver.alive && diver.region === c.region && hypot(diver.x - c.homeX, diver.y - c.homeY) < 260,
+    );
+    if (living.length >= samePopulation.length || threatened || sim.ecology[c.region].noise >= rule.quietBelow) {
+      c.timer = 4;
+      return;
+    }
+    c.x = c.homeX;
+    c.y = c.homeY;
+    c.vx = 0;
+    c.vy = 0;
+    c.hp = c.hpMax;
+    c.alive = true;
+    c.aggro = false;
+    c.hurt = 0;
+    c.touchCd = 0;
+    c.didHit = false;
+    c.lastHurtBy = null;
+    c.state = "patrol";
+    c.timer = 0;
+    c.netX = c.x;
+    c.netY = c.y;
+    sim.events.push(`returned:${c.kind}`);
+    return;
+  }
   c.hurt = Math.max(0, c.hurt - dt);
   c.touchCd = Math.max(0, c.touchCd - dt);
   const region = sim.regions[c.region];
@@ -870,8 +905,10 @@ function grant(sim: Sim, diver: Diver, kind: PickupKind, amount: number) {
   if (kind === "med") diver.hp = clamp(diver.hp + amount, 0, diver.hpMax);
   if (kind === "ammo") diver.ammo = clamp(diver.ammo + amount, 0, 28);
   if (kind === "cell") diver.cells = clamp(diver.cells + amount, 0, 99);
-  diver.hypoxia = 0;
-  diver.warned = false;
+  if (kind === "o2" && amount > 0) {
+    diver.hypoxia = 0;
+    diver.warned = false;
+  }
 }
 
 export function applyGrant(sim: Sim, id: string, kind: PickupKind, amount: number) {
@@ -1061,11 +1098,37 @@ function tryFire(sim: Sim, diver: Diver) {
 }
 
 function killCreature(sim: Sim, c: Creature) {
+  if (!c.alive) return;
   c.alive = false;
   c.hp = 0;
+  c.state = "down";
+  c.timer = CREATURE_RESPAWN_RULES[c.kind]?.cooldown ?? 0;
   sim.events.push(`kill:${c.kind}`);
   sim.shake = Math.max(sim.shake, c.kind === "maw" ? 12 : 3);
-  if (c.kind !== "maw") return;
+  if (c.kind !== "maw") {
+    const reward = rewardForDefeat(c.kind, c.id, sim.time);
+    if (!reward) return;
+    const rewardCount = sim.pickups.filter((pickup) => pickup.reward).length;
+    if (rewardCount >= MAX_REWARD_DROPS) {
+      const oldestTaken = sim.pickups.findIndex((pickup) => pickup.reward && pickup.taken);
+      if (oldestTaken >= 0) sim.pickups.splice(oldestTaken, 1);
+    }
+    if (sim.pickups.filter((pickup) => pickup.reward).length >= MAX_REWARD_DROPS) return;
+    sim.pickups.push({
+      id: `reward:${encodeURIComponent(c.id)}:${Math.floor(sim.time * 60)}`,
+      region: c.region,
+      kind: reward.kind,
+      x: c.x,
+      y: c.y,
+      amount: reward.amount,
+      reward: true,
+      taken: false,
+    });
+    sim.events.push("reward");
+    const label = reward.kind === "o2" ? "oxygen" : reward.kind === "med" ? "medical" : reward.kind === "ammo" ? "ammunition" : "energy";
+    note(sim, `${c.kind === "hunter" ? "Hunter" : c.kind === "sentry" ? "Sentry" : c.kind} down. ${label} recovery adrift.`);
+    return;
+  }
   sim.flags.mawDead = true;
   sim.bossBanner = 3.4;
   discover(sim, "plains-maw");
@@ -1113,6 +1176,7 @@ function stepProjectiles(sim: Sim, dt: number) {
         if (c.kind !== "darter") c.aggro = true;
         hit = true;
         sim.events.push("impact");
+        c.lastHurtBy = p.ownerId;
         if (c.hp <= 0) killCreature(sim, c);
         break;
       }
@@ -1239,16 +1303,22 @@ function stepDiverBody(sim: Sim, diver: Diver, dt: number, selfId: string) {
   if (tile === 2) chip(sim, diver, 16 * dt);
   diver.o2 = Math.max(0, diver.o2 - O2_DRAIN * dt);
   if (diver.o2 <= 0) {
+    const emptying = diver.hypoxia === 0;
     diver.hypoxia += dt;
-    if (!diver.warned && diver.kind === "you") {
-      diver.warned = true;
-      note(sim, "Lungs empty. A few seconds before the dark takes the rest.");
-      sim.events.push("hypoxia");
+    if (emptying) {
+      if (diver.kind === "you") note(sim, "Air exhausted. Return to a working vehicle or find an oxygen cache now.");
+      sim.events.push(`air-empty:${diver.id}`);
     }
     if (diver.hypoxia > 3.1) chip(sim, diver, 11 * dt);
   } else {
     diver.hypoxia = 0;
-    diver.warned = diver.o2 < 30;
+    if (diver.o2 < 30 && !diver.warned) {
+      diver.warned = true;
+      if (diver.kind === "you") note(sim, "Oxygen low. Find a refill or return to a working vehicle.");
+      sim.events.push(`air-low:${diver.id}`);
+    } else if (diver.o2 >= 45) {
+      diver.warned = false;
+    }
   }
 }
 
@@ -1359,9 +1429,19 @@ function stepPickups(sim: Sim) {
       if (!diver.alive || diver.region !== pickup.region || diver.vehicleId) continue;
       const reach = hypot(pickup.x - diver.x, pickup.y - diver.y);
       if (reach > 40) continue;
-      pickup.taken = true;
-      const amount = pickup.kind === "o2" ? 52 : pickup.kind === "med" ? 38 : pickup.kind === "ammo" ? 8 : 1;
-      collect(sim, diver, pickup.kind, amount);
+      const amount = pickup.amount ?? (pickup.kind === "o2" ? 52 : pickup.kind === "med" ? 38 : pickup.kind === "ammo" ? 8 : 1);
+      const needed = pickup.kind === "o2"
+        ? Math.max(0, diver.o2Max - diver.o2)
+        : pickup.kind === "med"
+          ? Math.max(0, diver.hpMax - diver.hp)
+          : pickup.kind === "ammo"
+            ? Math.max(0, 28 - diver.ammo)
+            : Math.max(0, 99 - diver.cells);
+      const received = Math.min(amount, needed);
+      if (received <= 0) continue;
+      collect(sim, diver, pickup.kind, received);
+      if (pickup.reward && received < amount) pickup.amount = amount - received;
+      else pickup.taken = true;
       break;
     }
   }
@@ -1440,6 +1520,7 @@ export function exportWorld(sim: Sim): WorldSnap {
     ecology: createEcology(sim.ecology),
     flags: { ...sim.flags },
     taken: sim.pickups.filter((p) => p.taken).map((p) => p.id),
+    drops: sim.pickups.filter((p) => p.reward).map((p) => ({ ...p })),
     creatures: sim.creatures.map((c) => ({
       id: c.id,
       x: c.x,
@@ -1504,6 +1585,10 @@ export function exportWorld(sim: Sim): WorldSnap {
 export function importWorld(sim: Sim, snap: WorldSnap, selfId: string) {
   sim.ecology = createEcology(snap.ecology);
   sim.flags = { ...sim.flags, ...snap.flags };
+  if (Array.isArray(snap.drops)) {
+    sim.pickups = sim.pickups.filter((pickup) => !pickup.reward);
+    sim.pickups.push(...reviveRewardDrops(snap.drops, sim.regions));
+  }
   for (const id of snap.taken) {
     const p = sim.pickups.find((item) => item.id === id);
     if (p) p.taken = true;
@@ -1605,6 +1690,7 @@ export function applyOwn(
     aimX?: number;
     aimY?: number;
     fire: boolean;
+    ammo?: number;
     cells?: number;
     tint: Diver["tint"];
   },
@@ -1641,6 +1727,7 @@ export function applyOwn(
   local.seat = snap.seat;
   local.name = snap.name;
   local.fireLatch = snap.fire;
+  if (typeof snap.ammo === "number" && Number.isFinite(snap.ammo)) local.ammo = clamp(Math.floor(snap.ammo), 0, 28);
   if (typeof snap.cells === "number" && Number.isFinite(snap.cells)) local.cells = clamp(Math.floor(snap.cells), 0, 99);
 }
 

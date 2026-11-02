@@ -93,6 +93,7 @@ type Hud = {
   o2: number;
   ammo: number;
   cells: number;
+  warning: string;
   region: string;
   depth: string;
   objective: string;
@@ -395,6 +396,7 @@ function readHud(session: Session): Hud {
     o2: you?.o2 ?? 0,
     ammo: you?.ammo ?? 0,
     cells: you?.cells ?? 0,
+    warning: survivalWarning(session.sim, you),
     region: region.name,
     depth: `${depth} m`,
     objective: objective(session.sim, you),
@@ -434,6 +436,26 @@ function readHud(session: Session): Hud {
     hypoxia: !!you && you.o2 <= 0 && you.alive,
     soren: ai ? `${ai.name} · ${ai.order} · ${ai.region === you?.region ? "with you" : ai.region}` : "",
   };
+}
+
+function survivalWarning(sim: Sim, you: Diver | undefined) {
+  if (!you) return "";
+  if (you.o2 < 30) {
+    const air = sim.pickups
+      .filter((pickup) => !pickup.taken && pickup.region === you.region && pickup.kind === "o2")
+      .sort((a, b) => Math.hypot(a.x - you.x, a.y - you.y) - Math.hypot(b.x - you.x, b.y - you.y))[0];
+    if (air) return "AIR LOW · An oxygen canister remains in this region.";
+    const shelter = sim.vehicles.find((vehicle) => vehicle.region === you.region && vehicle.energy > 0 && !vehicle.destroyed);
+    return shelter ? "AIR LOW · Return to a working vehicle now." : "AIR LOW · No local refill is known. Return to your beacon.";
+  }
+  if (you.hp <= 25) return "HEALTH CRITICAL · Break contact and find a safe route back.";
+  if (you.ammo <= 0) return "DARTS EMPTY · Evade or use a vehicle weapon with remaining charge.";
+  if (you.cells <= 0) return "NO ENERGY CELL · Grid restoration and emergency hull repair are unavailable.";
+  const vehicle = findVehicle(sim, you.vehicleId);
+  if (vehicle && (vehicle.destroyed || vehicle.hull / vehicle.hullMax < 0.2)) {
+    return vehicle.destroyed ? "VEHICLE LOST · Leave the hull and find shelter." : "HULL CRITICAL · Leave before the vehicle fails.";
+  }
+  return "";
 }
 
 function Meter({ label, value, tone }: { label: string; value: number; tone: "bio" | "rust" | "amber" }) {
@@ -1071,11 +1093,16 @@ export function GameApp() {
               <p className="text-[10px] tracking-[0.18em] text-biolume uppercase">{hud.region}</p>
               <div className="mt-2 flex flex-wrap gap-4">
                 <Meter label="Hull of you" value={hud.hp} tone="rust" />
-                <Meter label={hud.hypoxia ? "Hypoxia" : "Air"} value={hud.o2} tone={hud.hypoxia ? "amber" : "bio"} />
+                <Meter label={hud.hypoxia ? "Hypoxia" : hud.o2 < 30 ? "Air · low" : "Air"} value={hud.o2} tone={hud.hypoxia || hud.o2 < 30 ? "amber" : "bio"} />
               </div>
               <p className="mt-2 text-xs text-mist">
                 {hud.depth} · {hud.seat} · darts {hud.ammo} · cells {hud.cells}
               </p>
+              {hud.warning ? (
+                <p role="status" aria-live="polite" className="mt-2 max-w-[23rem] border border-amber/40 bg-abyss/90 px-2 py-1 text-[10px] leading-relaxed text-amber">
+                  {hud.warning}
+                </p>
+              ) : null}
               {hud.hull > 0 ? (
                 <div className="mt-2 flex gap-4">
                   <Meter label={`Vehicle ${hud.stage >= 4 ? "critical" : "hull"}`} value={hud.hull * 100} tone="amber" />

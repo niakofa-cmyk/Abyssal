@@ -100,6 +100,7 @@ export type Creature = {
   aimY: number;
   didHit: boolean;
   aggro: boolean;
+  lastHurtBy: string | null;
   netX: number;
   netY: number;
 };
@@ -127,6 +128,10 @@ export type Pickup = {
   x: number;
   y: number;
   taken: boolean;
+  /** A world reward created once by an authoritative creature defeat. */
+  reward?: boolean;
+  /** Reward stacks can be collected partially when a diver has limited capacity. */
+  amount?: number;
 };
 
 export type Marker = {
@@ -204,6 +209,8 @@ export type OutMsg =
 export type WorldSnap = {
   t: number;
   ecology?: Ecology;
+  /** Present in newer snapshots; omitted by older peers. */
+  drops?: Pickup[];
   flags: Sim["flags"];
   taken: string[];
   creatures: Array<

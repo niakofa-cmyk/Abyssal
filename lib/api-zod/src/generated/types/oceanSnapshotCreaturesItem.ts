@@ -17,4 +17,7 @@ export type OceanSnapshotCreaturesItem = {
   alive: boolean;
   state?: string;
   aggro?: boolean;
+  timer?: number;
+  /** @nullable */
+  lastHurtBy?: string | null;
 };
