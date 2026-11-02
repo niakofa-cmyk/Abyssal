@@ -24,3 +24,11 @@ Require JSON readiness and a real ocean join response before declaring deploymen
 **Why:** Nitro can auto-select a scaffold `index.html` before its SSR handler, making every API URL return HTML with HTTP 200 while Railway reports a successful deployment.
 
 **How to apply:** Check content type and response shape for health, roster, and join. A successful build and a green platform health check do not establish that application routes are active.
+
+## Production persistence probes
+
+Use isolated synthetic beacons for live checks. Do not delete or rewrite existing player records, and leave disposable test beacons to the game's normal adrift/shelf lifecycle. Keep persistent-ocean API checks distinct from browser-client checks and from the experimental browser-to-browser room. When a worker restart is authorized, restart the web service only; do not restart PostgreSQL as part of a diver-state test.
+
+**Why:** Production ocean requests write durable world state, while API success alone cannot certify the signed-in browser experience or multiplayer capacity.
+
+**How to apply:** Record the fields being compared before and after the check, use aggregate transition logs where possible, and state clearly whether the test used HTTP beacons, real browser clients, or a service restart.
