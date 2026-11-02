@@ -33,11 +33,11 @@ The surface revelation and trench remain future campaign work. The 2.5D recommen
 
 ## Persisting idle-world transitions
 
-A live Railway return probe preserved beacon, diver identity, region, and health but returned a different position and oxygen level after a 95-second absence. The first idle-shelf persistence fix was published but did not resolve it: the next probe had a 42.093-unit position difference and a 39.38 oxygen difference. Request logs showed no other ocean calls during the interval, and Railway had one configured replica. HTTP 200 alone is not evidence that a resumed dive restored its checkpoint.
+A live Railway return probe preserved beacon, diver identity, region, and health. Position and oxygen differed from the final pre-idle sync, but production logs confirmed the nine-second adrift transition, later shelving, and successful PostgreSQL save before rejoin. A local scheduler replay reproduced the same deltas exactly: they reflect the game's disconnect grace, not a missing shelf write. Validate the return against the actual shelved state, not the last sync.
 
-**Why:** The observed state mismatch persisted after fixing the known idle-shelf write gap. The remaining production cause is not established; the visible scheduler transitions and write outcome must be inspected rather than guessed.
+**Why:** Players continue simulating during the intentional quiet grace before their beacon is marked adrift; comparing a later return to the last input falsely classifies that expected movement and oxygen use as persistence loss.
 
-**How to apply:** Persist authoritative state changes when regions become inactive, and use PII-free runtime logs to confirm sweep and database-write outcomes. Verify position, oxygen, identity, region, and health after a long idle return and a Railway process/database reload before marking continuity reliable.
+**How to apply:** Persist authoritative state changes when regions become inactive. For return checks, compare the rejoined diver to the state captured at shelving, after the grace period; use transition/save logs to distinguish simulation from a missing database write.
 
 ## Reliable panel controls
 

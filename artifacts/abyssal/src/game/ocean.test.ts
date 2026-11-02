@@ -32,7 +32,7 @@ describe("regional ocean", () => {
     assert.match(adaSnap.toasts[0] ?? "", /east lock/);
   });
 
-  it("restores a shelved diver at the saved position with the same life-support state", () => {
+  it("restores the saved shelf state after the disconnect grace period", () => {
     const ocean = new Ocean();
     const token = ocean.join(null, "Persistence Probe");
     for (let i = 0; i < 12; i += 1) {
@@ -41,20 +41,41 @@ describe("regional ocean", () => {
     }
     ocean.setIntent(token, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, use: false, repair: false, cycle: false });
     ocean.step(1 / 20);
-    const saved = ocean.snapshot(token).you;
-    const sweep = ocean.sweep(Date.now() + 95_001);
-    assert.deepEqual(sweep, { changed: true, adrift: 1, shelved: 1 });
+    const lastSync = ocean.snapshot(token).you;
+    const idleStartedAt = Date.now();
+    const busy = () =>
+      (["breach", "plains", "city", "works", "reef"] as const).some((region) =>
+        ocean.sectors[region].divers.some((diver) => diver.alive || diver.respawn > 0),
+      );
+    let savedBody = ocean.toBody();
+    let adriftTransitions = 0;
+    let shelvedTransitions = 0;
+    for (let elapsed = 50; elapsed <= 95_000; elapsed += 50) {
+      const sweep = ocean.sweep(idleStartedAt + elapsed);
+      adriftTransitions += sweep.adrift;
+      shelvedTransitions += sweep.shelved;
+      if (busy()) {
+        ocean.step(1 / 20);
+      } else if (sweep.changed) {
+        savedBody = ocean.toBody();
+      }
+    }
+    assert.equal(adriftTransitions, 1, "the diver becomes adrift after the quiet grace period");
+    assert.equal(shelvedTransitions, 1, "the diver is shelved after the longer return window");
     assert.equal(ocean.locate(token), undefined, "an inactive return beacon is shelved");
-    const restoredOcean = Ocean.revive(ocean.toBody());
+    const shelfCheckpoint = savedBody.players.find((player) => player.token === token)?.stash;
+    assert.ok(shelfCheckpoint, "the idle-shelf save includes the diver checkpoint");
+    assert.notEqual(shelfCheckpoint.x, lastSync.x, "the checkpoint includes motion during disconnect grace");
+    const restoredOcean = Ocean.revive(savedBody);
     assert.equal(restoredOcean.locate(token), undefined, "the saved diver remains shelved after world reload");
     assert.equal(restoredOcean.join(token, "Persistence Probe"), token);
     const returned = restoredOcean.snapshot(token).you;
-    assert.equal(returned.id, saved.id);
-    assert.equal(returned.region, saved.region);
-    assert.ok(Math.abs(returned.x - saved.x) < 0.01);
-    assert.ok(Math.abs(returned.y - saved.y) < 0.01);
-    assert.equal(returned.hp, saved.hp);
-    assert.equal(returned.o2, saved.o2);
+    assert.equal(returned.id, shelfCheckpoint.id);
+    assert.equal(returned.region, shelfCheckpoint.region);
+    assert.equal(returned.x, shelfCheckpoint.x);
+    assert.equal(returned.y, shelfCheckpoint.y);
+    assert.equal(returned.hp, shelfCheckpoint.hp);
+    assert.equal(returned.o2, shelfCheckpoint.o2);
   });
 
   it("files the unnamed return without closing the heart", () => {

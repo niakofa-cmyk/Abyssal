@@ -33,12 +33,11 @@ Update this status document as gameplay capabilities change.
 ## Railway persistence probe — 2026-11-02 UTC
 
 - Confirmed the Railway production service is linked to `niakofa-cmyk/Abyssal` on `main`; the production health endpoint reports PostgreSQL ready.
-- A consented 95-second live return probe preserved the test beacon, diver identity, region, and health. It did **not** restore the saved position or oxygen within tolerance, even though the join and sync requests returned HTTP 200.
-- The idle-shelf write fix was published to Railway. A second controlled 95-second test still failed: the diver resumed with the same identity and region and preserved health, but position differed by 42.093 units and oxygen by 39.38.
-- The test window contained only the probe's requests; no other `/api/ocean` calls occurred between checkpoint and return. Railway reports one configured replica. This rules out another diver or a configured multi-replica race as the explanation, but does not identify the runtime cause.
-- Railway health remains ready with PostgreSQL, and the application returned HTTP 200. No runtime error explained the mismatch. The live result remains a failed persistence check, not a certification.
-- Local PII-free diagnostics now record adrift/shelve transitions and whether an idle-state write succeeded. These diagnostics pass local tests/build but have **not** been published; no third production test has been run.
-- The two nonpersonal probe records were left to auto-shelve; no existing production record was removed or changed.
+- The Railway service is linked to `niakofa-cmyk/Abyssal` on `main`, configured for one replica, and reports PostgreSQL ready.
+- A controlled 95-second production return preserved the beacon, diver identity, region, and health. Position differed from the last pre-idle sync by 42.093 units and oxygen by 39.38, but Railway logs confirmed the inactivity sweep marked the diver adrift, shelved it, and persisted the shelf state before the return.
+- The test window contained only the probe's requests; no other `/api/ocean` requests occurred during the idle period. A local 50 ms scheduler replay with the game's nine-second disconnect grace reproduced the same position and oxygen deltas exactly. The difference is expected simulation during that grace, not evidence of lost shelf data.
+- The test now checks that a rejoined diver exactly matches the state captured when shelved, after the grace period, rather than comparing it to the earlier last-sync snapshot. This validates the meaningful persistence invariant.
+- The diagnostic build is live, health is 200 with PostgreSQL ready, and its logs contain only transition counts and persistence outcomes—not player identifiers or coordinates. Test beacons are left to auto-shelve; no existing production record was removed or changed.
 
 ## Still unverified or not implemented
 
