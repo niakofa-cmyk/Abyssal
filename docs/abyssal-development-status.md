@@ -48,11 +48,22 @@ Update this status document as gameplay capabilities change.
 - A controlled restart of the Railway web service completed without restarting PostgreSQL. Afterward, both test beacon IDs, regions, positions, ammunition, and cells were restored without duplicate roster entries. Health and oxygen differed because those test divers were near or at death and the game applied its respawn behavior; healthy-resource continuity across a process restart is not certified by that run.
 - Railway logs recorded adrift/shelf transitions and successful persistence using aggregate counts, not player identifiers or coordinates. All probes used synthetic test beacons; no existing production record was deleted or intentionally modified.
 
+## This development increment: pack, save station, information desk
+
+- A diver carries a 20-slot pack beside the live suit counters. Oxygen, medicine, darts, and cells still fill the suit first. What will not fit stacks in the pack, up to a small stack limit. Glass slides and salvage stay in the pack until used.
+- I opens the pack. A packed supply can be drawn into the suit. Samples and scrap do not become air or ammunition.
+- One save station stands in the breach. E pins the return beacon there, restores a measured amount of hull and air, then waits twenty seconds before it will do that again. Region gates no longer move a pinned beacon. Blackout still returns the diver to it.
+- G at that station deposits the first occupied pack stack into an 8-slot locker, or withdraws the last locker stack when the pack is empty.
+- One information desk stands in the same corridor. The first use takes the station card and stows one glass slide. A later use files that slide into the expedition record. It does not open the collar or the surface.
+- A creature drop toast now names the amount left adrift. The world ring still draws that amount.
+- Pack, pin, station cooldown, beacon, and lockers ride on local saves and on the ocean diver view. A save that has none of those fields still loads.
+- No new region, species, or playable surface was added. This is not a two-browser or Railway-restart certification.
+
 ## Still unverified or not implemented
 
 - No signed-in browser-client return test or two-browser session was run; production checks used the persistent-ocean HTTP API.
 - No PostgreSQL service restart, database disaster-recovery test, multiplayer load test, or multiplayer capacity certification has run. The web-service restart did not certify healthy health/oxygen continuity.
-- No 20-slot stackable diver pack, separated station storage, new dedicated save/info station service, or redesigned full-death recovery loop has been added. Existing resource counters and respawn behavior remain.
+- The breach now has one save station, one information desk, and a 20-slot pack. There is no network of stations, no redesigned full-death inventory loss, and no pack shared live between two browsers beyond the ocean snapshot of the diver who carries it.
 - No new regions, species, or surface/trench campaign destinations have been added.
 
 ## What this does not claim
@@ -82,7 +93,7 @@ walkthrough remains unverified; do not represent the unit/save checks as a compl
 
 1. Run the same-region lifecycle through two real browser clients on Railway, then certify beacon recovery through a controlled worker restart.
 2. Finish reward-loop communication and collection edge cases before introducing inventory capacity.
-3. Build the 20-slot diver pack and its save/recovery rules; then integrate one save/resupply station and one information station.
+3. The first breach pack, save station, and information desk are in. Playtest that loop before adding more stations or pack kinds.
 4. Playtest and tune the complete first expedition: survival, evidence, vehicle cooperation, restoration, and the first Maw encounter.
 5. Expand ecological relationships and cooperative responsibilities from observed gameplay.
 6. Expand civilization and campaign content only after those foundations are convincing; protect the ascent and surface revelation.

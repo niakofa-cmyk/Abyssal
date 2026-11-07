@@ -11,6 +11,8 @@ const intent = z.object({
   use: z.boolean().optional(),
   repair: z.boolean().optional(),
   cycle: z.boolean().optional(),
+  pack: z.number().int().optional(),
+  stow: z.boolean().optional(),
 });
 
 const bodySchema = z.discriminatedUnion("action", [

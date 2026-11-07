@@ -1,4 +1,5 @@
 import type { Ecology } from "./ecology.ts";
+import type { PackSlot } from "./pack.ts";
 
 export const TILE = 32;
 export const VIEW_W = 512;
@@ -41,6 +42,11 @@ export type Diver = {
   beaconRegion: RegionId;
   vehicleId: string | null;
   seat: Seat | null;
+  /** Return point stays at a save station until the diver dies or sets another. */
+  pinned: boolean;
+  /** Sim time before the save station will restore air and health again. */
+  stationCd: number;
+  pack: Array<PackSlot | null>;
   order: "follow" | "hold";
   holdX: number;
   holdY: number;
@@ -140,7 +146,7 @@ export type Marker = {
   x: number;
   y: number;
   logId?: string;
-  kind: "lore" | "repair" | "upgrade";
+  kind: "lore" | "repair" | "upgrade" | "save" | "info";
 };
 
 export type Gate = {
@@ -180,6 +186,8 @@ export type Sim = {
   projectiles: Projectile[];
   pickups: Pickup[];
   markers: Marker[];
+  /** Station lockers. Missing on older oceans. */
+  lockers: Record<string, Array<PackSlot | null>>;
   taken: string[];
   discovered: string[];
   /** Records any diver in this ocean has recovered. Empty outside the shared sea. */

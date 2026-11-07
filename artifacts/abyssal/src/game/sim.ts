@@ -3,6 +3,7 @@ import type {
   Diver,
   Facing,
   Gate,
+  Marker,
   PickupKind,
   Projectile,
   Region,
@@ -18,6 +19,7 @@ import { isSolid, tileAt, buildLayout } from "./world.ts";
 import { casesClosedBy } from "./archive.ts";
 import { advanceEcology, createEcology, emitNoise, restorePower, ECOLOGY_EVENTS } from "./ecology.ts";
 import { CREATURE_RESPAWN_RULES, MAX_REWARD_DROPS, rewardForDefeat, reviveRewardDrops } from "./rewards.ts";
+import { LOCKER_SLOTS, SUPPLY_YIELD, drawOne, emptyPack, isPackKind, occupied, packLabel, stow } from "./pack.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -91,6 +93,9 @@ function makeDiver(
     beaconRegion: "breach",
     vehicleId: null,
     seat: null,
+    pinned: false,
+    stationCd: 0,
+    pack: emptyPack(),
     order: "follow",
     holdX: partial.x,
     holdY: partial.y,
@@ -164,6 +169,7 @@ export function createSim(opts: SpawnOpts): Sim {
     projectiles: [],
     pickups: layout.pickups,
     markers: layout.markers,
+    lockers: { "save-breach": emptyPack(LOCKER_SLOTS) },
     taken: [],
     discovered: [],
     shared: [],
@@ -825,6 +831,132 @@ export function cycleSeat(sim: Sim, diver: Diver) {
   }
 }
 
+function nearestMarker(sim: Sim, diver: Diver, kinds: Marker["kind"][]) {
+  let best: Marker | undefined;
+  let bestD = 70;
+  for (const marker of sim.markers) {
+    if (marker.region !== diver.region || !kinds.includes(marker.kind)) continue;
+    const dist = hypot(marker.x - diver.x, marker.y - diver.y);
+    if (dist <= bestD) {
+      bestD = dist;
+      best = marker;
+    }
+  }
+  return best;
+}
+
+function suitRoom(diver: Diver, kind: "o2" | "med" | "ammo" | "cell") {
+  if (kind === "o2") return Math.max(0, diver.o2Max - diver.o2);
+  if (kind === "med") return Math.max(0, diver.hpMax - diver.hp);
+  if (kind === "ammo") return Math.max(0, 28 - diver.ammo);
+  return Math.max(0, 99 - diver.cells);
+}
+
+function useSaveStation(sim: Sim, diver: Diver, station: Marker) {
+  diver.pinned = true;
+  diver.beaconX = station.x;
+  diver.beaconY = station.y;
+  diver.beaconRegion = station.region;
+  sim.events.push("beacon");
+  if (sim.time < diver.stationCd) {
+    note(sim, "Beacon held at the save station. The pumps are still cycling.");
+    return;
+  }
+  const beforeHp = diver.hp;
+  const beforeO2 = diver.o2;
+  diver.hp = clamp(diver.hp + 36, 0, diver.hpMax);
+  diver.o2 = clamp(diver.o2 + 42, 0, diver.o2Max);
+  diver.hypoxia = 0;
+  diver.warned = false;
+  diver.stationCd = sim.time + 20;
+  const gainedHp = Math.round(diver.hp - beforeHp);
+  const gainedO2 = Math.round(diver.o2 - beforeO2);
+  note(sim, `Beacon set. The station returns ${gainedHp} hull and ${gainedO2} air. It holds until you black out.`);
+}
+
+function useInfoStation(sim: Sim, diver: Diver, station: Marker) {
+  if (station.logId) {
+    const before = sim.discovered.slice();
+    discover(sim, station.logId);
+    if (sim.discovered.length !== before.length && diver.kind === "you") note(sim, "The desk keeps a record. It is in the journal.");
+  }
+  const sample = diver.pack.findIndex((slot) => slot?.kind === "sample");
+  if (sample >= 0) {
+    drawOne(diver.pack, sample);
+    const id = `sample:${diver.region}`;
+    discover(sim, id);
+    if (!sim.shared.includes(id)) sim.shared.push(id);
+    note(sim, "Slide filed. The expedition keeps the finding.");
+    sim.events.push("filed");
+    return;
+  }
+  if (!sim.discovered.includes("breach-slide")) {
+    if (stow(diver.pack, "sample", 1) > 0) note(sim, "A glass slide, and no room in the pack.");
+    else {
+      discover(sim, "breach-slide");
+      note(sim, "A glass slide from the desk. It goes in the pack. File it here when you are ready.");
+    }
+    return;
+  }
+  note(sim, "The desk is quiet. File a slide if you still carry one.");
+}
+
+export function pressPack(sim: Sim, diver: Diver, index: number) {
+  if (!diver.alive || diver.vehicleId) return;
+  const slot = diver.pack[index];
+  if (!slot) return;
+  if (slot.kind === "sample" || slot.kind === "scrap") {
+    note(sim, slot.kind === "sample" ? "A glass slide. The information desk can file it." : "Salvage. The save station can hold it.");
+    return;
+  }
+  if (suitRoom(diver, slot.kind) <= 0) {
+    note(sim, "The suit is already full. Leave it packed.");
+    return;
+  }
+  const kind = drawOne(diver.pack, index);
+  if (!kind || kind === "sample" || kind === "scrap") return;
+  grant(sim, diver, kind, SUPPLY_YIELD[kind]);
+  if (diver.kind === "you") note(sim, `${packLabel(kind)} from the pack.`);
+  sim.events.push("pack");
+}
+
+export function pressStow(sim: Sim, diver: Diver) {
+  if (!diver.alive || diver.vehicleId) return;
+  const station = nearestMarker(sim, diver, ["save"]);
+  if (!station) {
+    note(sim, "The save station can hold a pack stack.");
+    return;
+  }
+  const locker = sim.lockers[station.id] ?? (sim.lockers[station.id] = emptyPack(LOCKER_SLOTS));
+  const index = diver.pack.findIndex(Boolean);
+  if (index >= 0) {
+    const slot = diver.pack[index]!;
+    const left = stow(locker, slot.kind, slot.amount);
+    if (left === slot.amount) {
+      note(sim, "The station locker is full.");
+      return;
+    }
+    diver.pack[index] = left > 0 ? { kind: slot.kind, amount: left } : null;
+    note(sim, `${packLabel(slot.kind)} left in the station locker. Pack ${occupied(diver.pack)}/${diver.pack.length}.`);
+    sim.events.push("stow");
+    return;
+  }
+  for (let i = locker.length - 1; i >= 0; i -= 1) {
+    const slot = locker[i];
+    if (!slot) continue;
+    const left = stow(diver.pack, slot.kind, slot.amount);
+    if (left === slot.amount) {
+      note(sim, "The pack has no room for the locker.");
+      return;
+    }
+    locker[i] = left > 0 ? { kind: slot.kind, amount: left } : null;
+    note(sim, `${packLabel(slot.kind)} back in the pack.`);
+    sim.events.push("stow");
+    return;
+  }
+  note(sim, "The locker is empty.");
+}
+
 export function pressUse(sim: Sim, diver: Diver) {
   if (!diver.alive) return;
   if (diver.vehicleId) {
@@ -832,9 +964,16 @@ export function pressUse(sim: Sim, diver: Diver) {
     sim.events.push("exit");
     return;
   }
-  const station = sim.markers.find((marker) => marker.region === diver.region && marker.kind === "repair" &&
-    hypot(marker.x - diver.x, marker.y - diver.y) <= 52);
-  if (station && !sim.ecology[diver.region].powered) {
+  const station = nearestMarker(sim, diver, ["save", "info", "repair"]);
+  if (station?.kind === "save") {
+    useSaveStation(sim, diver, station);
+    return;
+  }
+  if (station?.kind === "info") {
+    useInfoStation(sim, diver, station);
+    return;
+  }
+  if (station?.kind === "repair" && !sim.ecology[diver.region].powered) {
     if (diver.cells > 0 && restorePower(sim.ecology[diver.region], station.x, station.y)) {
       diver.cells -= 1;
       if (diver.kind === "remote") sim.outbox.push({ k: "grant", id: diver.id, kind: "cell", amount: -1 });
@@ -917,7 +1056,7 @@ export function applyGrant(sim: Sim, id: string, kind: PickupKind, amount: numbe
   grant(sim, diver, kind, amount);
   if (diver.kind === "you") {
     const label = kind === "o2" ? "Oxygen" : kind === "med" ? "Medicine" : kind === "ammo" ? "Darts" : "Energy cell";
-    note(sim, amount < 0 ? `${label} used.` : `${label} aboard.`);
+    note(sim, amount < 0 ? `${label} used.` : `${label} +${amount}.`);
     if (amount > 0) sim.events.push("pickup");
   }
 }
@@ -1126,7 +1265,7 @@ function killCreature(sim: Sim, c: Creature) {
     });
     sim.events.push("reward");
     const label = reward.kind === "o2" ? "oxygen" : reward.kind === "med" ? "medical" : reward.kind === "ammo" ? "ammunition" : "energy";
-    note(sim, `${c.kind === "hunter" ? "Hunter" : c.kind === "sentry" ? "Sentry" : c.kind} down. ${label} recovery adrift.`);
+    note(sim, `${c.kind === "hunter" ? "Hunter" : c.kind === "sentry" ? "Sentry" : c.kind} down. ${reward.amount} ${label} adrift.`);
     return;
   }
   sim.flags.mawDead = true;
@@ -1360,9 +1499,11 @@ function transit(sim: Sim, diver: Diver) {
     for (const rider of sim.divers) {
       if (rider.vehicleId !== vehicle.id) continue;
       rider.region = dest.id;
-      rider.beaconRegion = dest.id;
-      rider.beaconX = arriveX;
-      rider.beaconY = arriveY;
+      if (!rider.pinned) {
+        rider.beaconRegion = dest.id;
+        rider.beaconX = arriveX;
+        rider.beaconY = arriveY;
+      }
     }
     if (diver.kind === "you") {
       note(sim, dest.name);
@@ -1375,9 +1516,11 @@ function transit(sim: Sim, diver: Diver) {
   diver.y = arriveY;
   diver.vx = 0;
   diver.vy = 0;
-  diver.beaconRegion = dest.id;
-  diver.beaconX = diver.x;
-  diver.beaconY = diver.y;
+  if (!diver.pinned) {
+    diver.beaconRegion = dest.id;
+    diver.beaconX = diver.x;
+    diver.beaconY = diver.y;
+  }
   unstick(sim, diver);
   if (diver.kind === "you") {
     note(sim, dest.name);
@@ -1430,17 +1573,13 @@ function stepPickups(sim: Sim) {
       const reach = hypot(pickup.x - diver.x, pickup.y - diver.y);
       if (reach > 40) continue;
       const amount = pickup.amount ?? (pickup.kind === "o2" ? 52 : pickup.kind === "med" ? 38 : pickup.kind === "ammo" ? 8 : 1);
-      const needed = pickup.kind === "o2"
-        ? Math.max(0, diver.o2Max - diver.o2)
-        : pickup.kind === "med"
-          ? Math.max(0, diver.hpMax - diver.hp)
-          : pickup.kind === "ammo"
-            ? Math.max(0, 28 - diver.ammo)
-            : Math.max(0, 99 - diver.cells);
-      const received = Math.min(amount, needed);
-      if (received <= 0) continue;
-      collect(sim, diver, pickup.kind, received);
-      if (pickup.reward && received < amount) pickup.amount = amount - received;
+      const intoSuit = Math.min(amount, suitRoom(diver, pickup.kind));
+      let left = amount - intoSuit;
+      if (intoSuit > 0) collect(sim, diver, pickup.kind, intoSuit);
+      if (left > 0 && isPackKind(pickup.kind)) left = stow(diver.pack, pickup.kind, left);
+      if (intoSuit === 0 && left === amount) continue;
+      if (intoSuit === 0 && diver.kind === "you") note(sim, `${packLabel(pickup.kind)} stowed. Pack ${occupied(diver.pack)}/${diver.pack.length}.`);
+      if (pickup.reward && left > 0) pickup.amount = left;
       else pickup.taken = true;
       break;
     }

@@ -3,7 +3,9 @@ import {
   createSim,
   findDiver,
   insertDiver,
+  pressPack,
   pressRepair,
+  pressStow,
   pressUse,
   stepSim,
 } from "./sim.ts";
@@ -11,6 +13,7 @@ import { TILE, ZONES, type Facing, type Projectile, type RegionId, type Seat, ty
 import { casesClosedBy } from "./archive.ts";
 import { ECOLOGY_EVENTS, reviveEcology, type RegionEcology } from "./ecology.ts";
 import { reviveRewardDrops } from "./rewards.ts";
+import { LOCKER_SLOTS, revivePack, type PackSlot } from "./pack.ts";
 
 export const REGIONS: RegionId[] = ["breach", "plains", "city", "works", "reef"];
 
@@ -23,6 +26,10 @@ export type OceanIntent = {
   use?: boolean;
   repair?: boolean;
   cycle?: boolean;
+  /** Use this pack slot. */
+  pack?: number;
+  /** Deposit or withdraw at the save station. */
+  stow?: boolean;
 };
 
 export type SectorReport = {
@@ -53,6 +60,9 @@ export type DiverView = {
   seat: Seat | null;
   aimX: number;
   aimY: number;
+  pack?: Array<PackSlot | null>;
+  pinned?: boolean;
+  stationCd?: number;
 };
 
 export type OceanSnap = {
@@ -107,6 +117,8 @@ export type OceanSnap = {
   found: string[];
   explored: Record<RegionId, number[]>;
   roster: SectorReport[];
+  /** Save-station lockers. Older snapshots omit them. */
+  lockers?: Record<string, Array<PackSlot | null>>;
 };
 
 type Crumb = { text: string; life: number };
@@ -159,6 +171,7 @@ export type OceanBody = {
   >;
   divers: DiverSave[];
   found?: string[];
+  lockers?: Record<string, Array<PackSlot | null>>;
   players: { token: string; callsign: string; seen: string[]; explored: Record<RegionId, number[]>; stash: DiverSave | null }[];
 };
 
@@ -216,6 +229,9 @@ function viewDiver(d: Sim["divers"][number]): DiverView {
     seat: d.seat,
     aimX: d.aimX,
     aimY: d.aimY,
+    pack: d.pack.map((slot) => (slot ? { ...slot } : null)),
+    pinned: d.pinned,
+    stationCd: d.stationCd,
   };
 }
 
@@ -342,6 +358,8 @@ export class Ocean {
         );
       }
     }
+    if (Number.isInteger(intent.pack)) this.actPack(sim, diver, intent.pack as number);
+    if (intent.stow) this.actStow(sim, diver);
   }
 
   step(dt: number) {
@@ -467,6 +485,7 @@ export class Ocean {
       found: this.found,
       explored: player.explored,
       roster: this.roster(),
+      lockers: this.sectors.breach.lockers,
     };
   }
 
@@ -575,6 +594,7 @@ export class Ocean {
       sectors,
       divers,
       found: this.found,
+      lockers: this.sectors.breach.lockers,
       players: [...this.players.values()].map((p) => ({
         token: p.token,
         callsign: p.callsign,
@@ -594,6 +614,12 @@ export class Ocean {
       for (const id of player.seen ?? []) found.add(id);
     }
     ocean.found = [...found];
+    if (body.lockers) {
+      ocean.sectors.breach.lockers = {};
+      for (const [id, slots] of Object.entries(body.lockers)) {
+        ocean.sectors.breach.lockers[id] = revivePack(slots, id === "save-breach" ? 8 : 20);
+      }
+    }
     for (const id of REGIONS) {
       const saved = body.sectors[id];
       const sim = ocean.sectors[id];
@@ -799,6 +825,9 @@ export class Ocean {
     diver.ax = saved.ax;
     diver.ay = saved.ay;
     diver.fireLatch = saved.fire;
+    diver.pack = revivePack(saved.pack);
+    diver.pinned = !!saved.pinned;
+    diver.stationCd = Number.isFinite(saved.stationCd) ? saved.stationCd! : 0;
     diver.netX = saved.x;
     diver.netY = saved.y;
     if (!this.players.has(saved.id)) {
@@ -832,12 +861,35 @@ export class Ocean {
     this.toast(player.token, "The beacon pulled you back to the breach.");
   }
 
+  private actPack(sim: Sim, diver: Sim["divers"][number], index: number) {
+    const toastId = sim.toastId;
+    pressPack(sim, diver, index);
+    for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
+  }
+
+  private actStow(sim: Sim, diver: Sim["divers"][number]) {
+    const toastId = sim.toastId;
+    pressStow(sim, diver);
+    for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
+  }
+
+  private keepRecords(token: string, sim: Sim) {
+    const player = this.players.get(token);
+    for (const event of sim.events) {
+      if (!event.startsWith("log:")) continue;
+      const id = event.slice(4);
+      if (player && !player.seen.includes(id)) player.seen.push(id);
+      if (!this.found.includes(id)) this.found.push(id);
+    }
+  }
+
   private actUse(sim: Sim, diver: Sim["divers"][number]) {
     const had = diver.vehicleId;
     const seat = diver.seat;
     const wasPowered = sim.ecology[diver.region].powered;
     const toastId = sim.toastId;
     pressUse(sim, diver);
+    this.keepRecords(diver.id, sim);
     if (!wasPowered && sim.ecology[diver.region].powered) {
       for (const observer of sim.divers) this.toast(observer.id, ECOLOGY_EVENTS.power);
     } else {
@@ -1071,10 +1123,17 @@ export function applyOceanView(sim: Sim, selfId: string, snap: OceanSnap) {
     local.name = saved.name;
     local.kind = saved.id === selfId ? "you" : "remote";
     local.tint = saved.id === selfId ? "you" : "remote";
+    if (saved.pack) local.pack = revivePack(saved.pack);
+    if (typeof saved.pinned === "boolean") local.pinned = saved.pinned;
+    if (Number.isFinite(saved.stationCd)) local.stationCd = saved.stationCd!;
     if (saved.id !== selfId) {
       local.aimX = saved.aimX;
       local.aimY = saved.aimY;
     }
   }
   sim.toasts = snap.toasts.map((text, index) => ({ id: index + 1, text, life: 2.4 }));
+  if (snap.lockers) {
+    sim.lockers = {};
+    for (const [id, slots] of Object.entries(snap.lockers)) sim.lockers[id] = revivePack(slots, LOCKER_SLOTS);
+  }
 }

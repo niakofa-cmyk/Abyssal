@@ -198,18 +198,23 @@ export function drawSea(
     const p = screen(camX, camY, marker.x, marker.y);
     if (marker.kind === "lore") blit(ctx, art.props, 2, 2, 3, p.x, p.y, 36, 36, false);
     else {
-      ctx.strokeStyle = marker.kind === "upgrade" ? "#e7a04a" : "#3ee0c5";
+      const kind = marker.kind;
+      ctx.strokeStyle = kind === "upgrade" ? "#e7a04a" : kind === "save" ? "#f2d180" : kind === "info" ? "#d7c4a3" : "#3ee0c5";
       ctx.strokeRect(p.x - 10, p.y - 10, 20, 20);
-      if (marker.kind === "repair" && observer?.alive && !observer.vehicleId &&
-          Math.hypot(observer.x - marker.x, observer.y - marker.y) <= 70) {
+      const near = !!observer?.alive && !observer.vehicleId && Math.hypot(observer.x - marker.x, observer.y - marker.y) <= 70;
+      const label =
+        kind === "repair" && near ? (memory.powered ? "GRID ONLINE" : "E / USE: GRID · 1 CELL") :
+        kind === "save" && near ? "E / USE: SAVE · G LOCKER" :
+        kind === "info" && near ? "E / USE: FILE" :
+        "";
+      if (label) {
         ctx.save();
         ctx.font = "8px monospace";
         ctx.textAlign = "center";
-        const label = memory.powered ? "GRID ONLINE" : "E / USE: GRID · 1 CELL";
         const width = ctx.measureText(label).width + 10;
         ctx.fillStyle = "rgba(2, 12, 18, 0.9)";
         ctx.fillRect(p.x - width / 2, p.y - 29, width, 13);
-        ctx.fillStyle = "#8cf1d4";
+        ctx.fillStyle = kind === "save" ? "#f2d180" : "#8cf1d4";
         ctx.fillText(label, p.x, p.y - 20);
         ctx.restore();
       }

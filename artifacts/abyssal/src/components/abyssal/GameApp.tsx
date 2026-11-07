@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Anchor, ArrowLeft, BookOpen, Map, Radio, Volume2, VolumeX } from "lucide-react";
+import { Anchor, ArrowLeft, Backpack, BookOpen, Map, Radio, Volume2, VolumeX } from "lucide-react";
 import { StageMap } from "@/components/abyssal/StageMap";
 import { LivingOceanPanel } from "@/components/abyssal/LivingOceanPanel";
 import { BESTIARY } from "@/game/content";
@@ -31,7 +31,9 @@ import {
   importWorld,
   note,
   objective,
+  pressPack,
   pressRepair,
+  pressStow,
   pressUse,
   stepSim,
   velocityOf,
@@ -44,8 +46,9 @@ import { understanding, UNDERSTANDING } from "@/game/understanding";
 import { drawPassage } from "@/game/opening";
 import { ecologySummary } from "@/game/ecology";
 import { consumeActionEdge, queueActionKey } from "@/game/input";
+import { occupied, packLabel } from "@/game/pack";
 
-type Overlay = "none" | "map" | "journal" | "pause" | "dead";
+type Overlay = "none" | "map" | "journal" | "pause" | "pack" | "dead";
 
 type Session = {
   sim: Sim;
@@ -93,6 +96,7 @@ type Hud = {
   o2: number;
   ammo: number;
   cells: number;
+  pack: string;
   warning: string;
   region: string;
   depth: string;
@@ -270,7 +274,7 @@ function installProbe(session: Session) {
 function applyInput(session: Session) {
   const you = findDiver(session.sim, session.selfId);
   if (!you) return;
-  if (session.overlay === "pause" || session.overlay === "map" || session.overlay === "journal") {
+  if (session.overlay === "pause" || session.overlay === "map" || session.overlay === "journal" || session.overlay === "pack") {
     if (session.ocean) {
       session.ocean.intent.ax = 0;
       session.ocean.intent.ay = 0;
@@ -381,6 +385,29 @@ function swapSeats(session: Session, you: Diver) {
   cycleSeat(session.sim, you);
 }
 
+function useLocker(session: Session) {
+  const you = findDiver(session.sim, session.selfId);
+  if (!you || session.overlay === "dead") return;
+  if (session.ocean) {
+    session.ocean.intent.stow = true;
+    void session.ocean.flush();
+    return;
+  }
+  if (session.link.auth) pressStow(session.sim, you);
+  else note(session.sim, "The locker answers the diver who holds the depth.");
+}
+
+function usePacked(session: Session, index: number) {
+  const you = findDiver(session.sim, session.selfId);
+  if (!you || !you.alive) return;
+  if (session.ocean) {
+    session.ocean.intent.pack = index;
+    void session.ocean.flush();
+    return;
+  }
+  if (session.link.auth) pressPack(session.sim, you, index);
+}
+
 function readHud(session: Session): Hud {
   const you = findDiver(session.sim, session.selfId);
   const region = you ? session.sim.regions[you.region] : session.sim.regions.breach;
@@ -396,6 +423,7 @@ function readHud(session: Session): Hud {
     o2: you?.o2 ?? 0,
     ammo: you?.ammo ?? 0,
     cells: you?.cells ?? 0,
+    pack: you ? `${occupied(you.pack)}/${you.pack.length}` : "0/20",
     warning: survivalWarning(session.sim, you),
     region: region.name,
     depth: `${depth} m`,
@@ -503,7 +531,7 @@ export function GameApp() {
     canvasRef.current?.focus({ preventScroll: true });
   }
 
-  function togglePanel(panel: "pause" | "map" | "journal") {
+  function togglePanel(panel: "pause" | "map" | "journal" | "pack") {
     const session = sessionRef.current;
     if (!session || session.overlay === "dead") return;
     if (session.overlay === panel) {
@@ -574,9 +602,14 @@ export function GameApp() {
         if (event.target.closest("input, textarea, select")) return;
         if (event.target.closest("button, a, summary") && ["Enter", "Space", "Tab"].includes(event.code)) return;
       }
-      if ((event.code === "KeyM" || event.code === "KeyJ") && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if ((event.code === "KeyM" || event.code === "KeyJ" || event.code === "KeyI") && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
-        if (!event.repeat) togglePanel(event.code === "KeyM" ? "map" : "journal");
+        if (!event.repeat) togglePanel(event.code === "KeyM" ? "map" : event.code === "KeyJ" ? "journal" : "pack");
+        return;
+      }
+      if (event.code === "KeyG" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        if (!event.repeat && session.overlay !== "dead") useLocker(session);
         return;
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Tab"].includes(event.code)) {
@@ -618,7 +651,7 @@ export function GameApp() {
       session.netAcc += frameDt;
       session.saveAcc += frameDt;
       applyInput(session);
-      const paused = session.overlay === "map" || session.overlay === "journal" || session.overlay === "pause";
+      const paused = session.overlay === "map" || session.overlay === "journal" || session.overlay === "pause" || session.overlay === "pack";
       if (session.ocean) {
         if (!paused) glideOcean(session.sim, frameDt);
         const heard = session.ocean.drainEvents();
@@ -1096,7 +1129,7 @@ export function GameApp() {
                 <Meter label={hud.hypoxia ? "Hypoxia" : hud.o2 < 30 ? "Air · low" : "Air"} value={hud.o2} tone={hud.hypoxia || hud.o2 < 30 ? "amber" : "bio"} />
               </div>
               <p className="mt-2 text-xs text-mist">
-                {hud.depth} · {hud.seat} · darts {hud.ammo} · cells {hud.cells}
+                {hud.depth} · {hud.seat} · darts {hud.ammo} · cells {hud.cells} · pack {hud.pack}
               </p>
               {hud.warning ? (
                 <p role="status" aria-live="polite" className="mt-2 max-w-[23rem] border border-amber/40 bg-abyss/90 px-2 py-1 text-[10px] leading-relaxed text-amber">
@@ -1156,6 +1189,11 @@ export function GameApp() {
         }}>
           <Map className="size-4" />
         </button>
+        <button type="button" className="grid size-11 place-items-center border border-line bg-deep/85" aria-label="Pack" onClick={() => {
+          togglePanel("pack");
+        }}>
+          <Backpack className="size-4" />
+        </button>
         <button type="button" className="grid size-11 place-items-center border border-line bg-deep/85" aria-label="Journal" onClick={() => {
           togglePanel("journal");
         }}>
@@ -1194,7 +1232,7 @@ export function GameApp() {
           className="absolute inset-0 grid place-items-center bg-deep/72 p-4"
           role="dialog"
           aria-modal="true"
-          aria-label={overlay === "map" ? "Expedition map" : overlay === "journal" ? "Archive" : "Dive controls"}
+          aria-label={overlay === "map" ? "Expedition map" : overlay === "journal" ? "Archive" : overlay === "pack" ? "Diver pack" : "Dive controls"}
           onKeyDown={(event) => {
             if (event.key !== "Tab") return;
             const controls = event.currentTarget.querySelectorAll<HTMLElement>(
@@ -1214,7 +1252,7 @@ export function GameApp() {
           <div className="flex max-h-[86%] w-full max-w-3xl flex-col overflow-hidden border border-line bg-abyss">
             <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
               <p className="text-xs tracking-[0.16em] text-mist uppercase">
-                {overlay === "map" ? "Expedition map" : overlay === "journal" ? "Archive" : "Dive controls"}
+                {overlay === "map" ? "Expedition map" : overlay === "journal" ? "Archive" : overlay === "pack" ? "Diver pack" : "Dive controls"}
               </p>
               <button
                 type="button"
@@ -1233,7 +1271,8 @@ export function GameApp() {
                 <ul className="mt-4 space-y-1 text-sm text-mist">
                   <li>WASD swim or helm. A left, D right. W rises, S sinks.</li>
                   <li>The mouse aims. On a phone the right stick aims. The tick is the shot.</li>
-                  <li>Space harpoon or torpedo. E board, exit, or restore a nearby district grid with one cell. R repairs a hull.</li>
+                  <li>Space harpoon or torpedo. E board, exit, restore a nearby grid, or use a save or information station. R repairs a hull.</li>
+                  <li>I opens the pack. A full suit stows the extra. G at the save station leaves a stack in the locker, or takes the last one back.</li>
                   <li>Warm conduits attract ribbon eels. Engines and weapons disturb the ecosystem. Going quietly is a choice.</li>
                   <li>Arrows and L are Imani, if she launched with you. V holds Soren in this sector.</li>
                   <li>Tab cycles seats. The helm steers. The tube fires. The pumps brace. The sea keeps the booking.</li>
@@ -1262,6 +1301,16 @@ export function GameApp() {
             ) : null}
             {overlay === "journal" ? (
               <Journal sim={sessionRef.current?.sim} selfId={sessionRef.current?.selfId ?? ""} />
+            ) : null}
+            {overlay === "pack" ? (
+              <PackPanel
+                sim={sessionRef.current?.sim}
+                selfId={sessionRef.current?.selfId ?? ""}
+                onUse={(index) => {
+                  const session = sessionRef.current;
+                  if (session) usePacked(session, index);
+                }}
+              />
             ) : null}
             </div>
           </div>
@@ -1530,6 +1579,38 @@ function Chart({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
       <p className="mt-3 text-xs text-mist">
         The surface is not a mode. Light in the reef, a broken signal, and a sealed collar are all it will give you until the ascent is earned.
       </p>
+    </div>
+  );
+}
+
+function PackPanel({ sim, selfId, onUse }: { sim: Sim | undefined; selfId: string; onUse: (index: number) => void }) {
+  if (!sim) return null;
+  const you = findDiver(sim, selfId);
+  if (!you) return null;
+  const locker = sim.lockers["save-breach"] ?? [];
+  return (
+    <div>
+      <h2 className="font-display text-3xl">Twenty slots</h2>
+      <p className="mt-2 text-sm text-mist">
+        The suit still holds what you are breathing and firing. The pack holds the rest. Pack {occupied(you.pack)}/{you.pack.length}. Locker {occupied(locker)}/{locker.length || 8}.
+      </p>
+      <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {you.pack.map((slot, index) => (
+          <li key={index} className="border border-line bg-deep/60 px-2 py-2">
+            <p className="text-[10px] tracking-[0.14em] text-mist uppercase">{String(index + 1).padStart(2, "0")}</p>
+            <p className="mt-1 text-sm text-foam">{slot ? `${packLabel(slot.kind)} ×${slot.amount}` : "empty"}</p>
+            <button
+              type="button"
+              className="mt-2 h-9 w-full border border-line text-xs text-biolume disabled:text-mist"
+              disabled={!slot || !!you.vehicleId || !you.alive}
+              onClick={() => onUse(index)}
+            >
+              Use
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-mist">G at the save station deposits the first stack, or withdraws the last locker stack when the pack is empty. Slides are filed at the information desk.</p>
     </div>
   );
 }

@@ -21,6 +21,14 @@ export const LOGS: Record<string, LogEntry> = {
     title: "Specimen note, unsigned",
     body: "The ribbon eels left the reef lights three days before the blast. They gathered on the warm pipes. Whatever we woke down there, it already knew the shape of our hulls.",
   },
+  "breach-desk": {
+    title: "Breach desk — station card",
+    body: "Save station holds a beacon and a locker. The pumps will put air and hull back, then they need a moment. Information desk files a glass slide into the expedition record. Neither station opens the collar.",
+  },
+  "sample:breach": {
+    title: "Filed slide — breach silt",
+    body: "The desk kept one glass slide from the breach. Silt, a thread of conduit growth, and no name. The expedition has the finding. The collar does not open for it.",
+  },
   "breach-loft": {
     title: "A name in the loft glass",
     body: "Someone wrote a name in the condensation, and a date that is only a month. Under it: oranges on Friday if the tram runs. The glass is cracked. The name is not.",

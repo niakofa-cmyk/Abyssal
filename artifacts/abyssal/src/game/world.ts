@@ -376,6 +376,8 @@ export function buildLayout() {
     { id: "m19", region: "breach", x: 20 * TILE, y: 10 * TILE, kind: "lore", logId: "breach-shadow" },
     { id: "m4", region: "breach", x: 44 * TILE, y: 6.5 * TILE, kind: "upgrade" },
     { id: "m5", region: "breach", x: 80 * TILE, y: 5 * TILE, kind: "repair" },
+    { id: "save-breach", region: "breach", x: 10 * TILE, y: 9 * TILE, kind: "save" },
+    { id: "info-breach", region: "breach", x: 24 * TILE, y: 9 * TILE, kind: "info", logId: "breach-desk" },
     { id: "m6", region: "plains", x: 22 * TILE, y: 6 * TILE, kind: "lore", logId: "plains-city" },
     { id: "m7", region: "plains", x: 100 * TILE, y: 6 * TILE, kind: "lore", logId: "plains-maw" },
     { id: "m8", region: "plains", x: 168 * TILE, y: 8 * TILE, kind: "lore", logId: "plains-surface" },

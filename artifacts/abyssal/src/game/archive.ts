@@ -49,6 +49,16 @@ export const STATIONS: Record<string, { kind: StationKind; place: string; missin
     place: "Breach loft",
     missing: "the name written in the loft",
   },
+  "breach-desk": {
+    kind: "engineering",
+    place: "Breach desk",
+    missing: "the station card on the breach desk",
+  },
+  "sample:breach": {
+    kind: "research",
+    place: "Breach desk",
+    missing: "a filed glass slide from the breach",
+  },
   "plains-city": {
     kind: "history",
     place: "Plains",

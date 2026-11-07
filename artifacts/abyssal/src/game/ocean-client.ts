@@ -28,7 +28,7 @@ export class OceanClient {
   token = "";
   status: "linking" | "live" | "failed" = "linking";
   roster: SectorReport[] = [];
-  intent: OceanIntent = { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, use: false, repair: false, cycle: false };
+  intent: OceanIntent = { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, use: false, repair: false, cycle: false, stow: false };
   onRoster: ((roster: SectorReport[]) => void) | null = null;
   private sim: Sim | null = null;
   private timer = 0;
@@ -69,6 +69,8 @@ export class OceanClient {
     this.intent.use = false;
     this.intent.repair = false;
     this.intent.cycle = false;
+    this.intent.pack = undefined;
+    this.intent.stow = false;
     try {
       const data = await post({ action: "sync", token: this.token, input });
       if (!this.sim || !data.snap) return;

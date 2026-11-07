@@ -1,6 +1,7 @@
 import type { Pickup, RegionId, Sim } from "./types";
 import { createEcology, type Ecology } from "./ecology.ts";
 import { CREATURE_RESPAWN_RULES, reviveRewardDrops } from "./rewards.ts";
+import { LOCKER_SLOTS, emptyPack, revivePack, type PackSlot } from "./pack.ts";
 
 const PROFILE = "abyssal-profile-v2";
 const LEGACY_PROFILE = "abyssal-profile-v1";
@@ -19,7 +20,22 @@ export type SaveFile = {
   version: 2;
   ecology?: Ecology;
   time: number;
-  you: { region: RegionId; x: number; y: number; hp: number; o2: number; ammo: number; cells: number };
+  you: {
+    region: RegionId;
+    x: number;
+    y: number;
+    hp: number;
+    o2: number;
+    ammo: number;
+    cells: number;
+    pack?: Array<PackSlot | null>;
+    pinned?: boolean;
+    stationCd?: number;
+    beaconX?: number;
+    beaconY?: number;
+    beaconRegion?: RegionId;
+  };
+  lockers?: Record<string, Array<PackSlot | null>>;
   discovered: string[];
   explored: Record<RegionId, number[]>;
   flags: Sim["flags"];
@@ -97,6 +113,12 @@ export function writeSave(sim: Sim, selfId: string) {
       o2: you.o2,
       ammo: you.ammo,
       cells: you.cells,
+      pack: you.pack,
+      pinned: you.pinned,
+      stationCd: you.stationCd,
+      beaconX: you.beaconX,
+      beaconY: you.beaconY,
+      beaconRegion: you.beaconRegion,
     },
     ecology: createEcology(sim.ecology),
     discovered: sim.discovered,
@@ -122,6 +144,7 @@ export function writeSave(sim: Sim, selfId: string) {
       lastHurtBy: c.lastHurtBy,
     })),
     drops: sim.pickups.filter((pickup) => pickup.reward).map((pickup) => ({ ...pickup })),
+    lockers: sim.lockers,
   };
   localStorage.setItem(SAVE, JSON.stringify(file));
 }
@@ -183,8 +206,21 @@ export function applySave(sim: Sim, selfId: string, file: SaveFile) {
   you.o2 = file.you.o2;
   you.ammo = file.you.ammo;
   you.cells = file.you.cells;
-  you.beaconRegion = file.you.region;
-  you.beaconX = file.you.x;
-  you.beaconY = file.you.y;
+  you.pack = revivePack(file.you.pack);
+  you.pinned = !!file.you.pinned;
+  you.stationCd = Number.isFinite(file.you.stationCd) ? file.you.stationCd! : 0;
+  if (file.you.pinned && file.you.beaconRegion) {
+    you.beaconRegion = file.you.beaconRegion;
+    you.beaconX = file.you.beaconX ?? you.x;
+    you.beaconY = file.you.beaconY ?? you.y;
+  } else {
+    you.beaconRegion = file.you.region;
+    you.beaconX = file.you.x;
+    you.beaconY = file.you.y;
+  }
+  if (file.lockers) {
+    sim.lockers = {};
+    for (const [id, slots] of Object.entries(file.lockers)) sim.lockers[id] = revivePack(slots, LOCKER_SLOTS);
+  }
   you.alive = you.hp > 0;
 }

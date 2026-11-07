@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hurtDiver, createSim, findDiver, objective, pressUse, stepSim } from "./sim.ts";
+import { hurtDiver, createSim, findDiver, objective, pressPack, pressStow, pressUse, stepSim } from "./sim.ts";
 import { TILE, ZONES } from "./types.ts";
 import { understanding } from "./understanding.ts";
 import { archiveOf, casesClosedBy, mawStages } from "./archive.ts";
 import { createOpening, stepOpening } from "./opening.ts";
 import { stepVision, visionDone } from "./vision.ts";
 import { buildLayout, isSolid } from "./world.ts";
+import { stow } from "./pack.ts";
+import { applySave, type SaveFile } from "./persist.ts";
 
 describe("abyssal sim", () => {
   it("opens alone, short on air, and points at the loft canister", () => {
@@ -243,5 +245,120 @@ describe("abyssal sim", () => {
     const sonar = sim.markers.find((marker) => marker.logId === "breach-sonar");
     assert.ok(sonar);
     assert.equal(isSolid(sim.regions.breach, sonar.x, sonar.y, false), false);
+  });
+
+  it("stows overflow when the suit is already full", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    const can = sim.pickups.find((pickup) => pickup.id === "o2-a");
+    assert.ok(you && can);
+    you.o2 = you.o2Max;
+    you.x = can.x;
+    you.y = can.y;
+    stepSim(sim, 0, true, "a");
+    assert.equal(can.taken, true);
+    assert.equal(you.o2, you.o2Max);
+    assert.equal(you.pack.find((slot) => slot?.kind === "o2")?.amount, 4);
+    you.ammo = 0;
+    const index = you.pack.findIndex((slot) => !slot);
+    stow(you.pack, "ammo", 2);
+    pressPack(sim, you, you.pack.findIndex((slot) => slot?.kind === "ammo"));
+    assert.equal(you.ammo, 4);
+    assert.equal(index >= 0, true);
+  });
+
+  it("pins the save beacon, restores air, and comes back there", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    const station = sim.markers.find((marker) => marker.id === "save-breach");
+    const desk = sim.markers.find((marker) => marker.id === "info-breach");
+    assert.ok(you && station && desk);
+    assert.equal(isSolid(sim.regions.breach, station.x, station.y, false), false);
+    assert.equal(isSolid(sim.regions.breach, desk.x, desk.y, false), false);
+    you.x = station.x;
+    you.y = station.y;
+    you.hp = 20;
+    you.o2 = 10;
+    pressUse(sim, you);
+    assert.equal(you.pinned, true);
+    assert.equal(you.beaconRegion, "breach");
+    assert.equal(you.beaconX, station.x);
+    assert.equal(you.hp, 56);
+    assert.equal(you.o2, 52);
+    const held = you.hp;
+    pressUse(sim, you);
+    assert.equal(you.hp, held);
+    stow(you.pack, "scrap", 2);
+    pressStow(sim, you);
+    assert.equal(you.pack.some((slot) => slot?.kind === "scrap"), false);
+    assert.equal(sim.lockers["save-breach"].some((slot) => slot?.kind === "scrap"), true);
+    you.region = "plains";
+    you.x = 400;
+    you.y = 200;
+    you.hp = 1;
+    you.iframe = 0;
+    hurtDiver(sim, you.id, 20);
+    assert.equal(you.alive, false);
+    for (let i = 0; i < 200 && !you.alive; i += 1) stepSim(sim, 1 / 60, true, "a");
+    assert.equal(you.alive, true);
+    assert.equal(you.region, "breach");
+    assert.equal(you.x, station.x);
+    assert.equal(you.y, station.y);
+  });
+
+  it("files a glass slide at the information desk", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    const desk = sim.markers.find((marker) => marker.id === "info-breach");
+    assert.ok(you && desk);
+    you.x = desk.x;
+    you.y = desk.y;
+    pressUse(sim, you);
+    assert.ok(sim.discovered.includes("breach-desk"));
+    assert.ok(sim.discovered.includes("breach-slide"));
+    assert.equal(you.pack.some((slot) => slot?.kind === "sample"), true);
+    pressUse(sim, you);
+    assert.equal(you.pack.some((slot) => slot?.kind === "sample"), false);
+    assert.ok(sim.discovered.includes("sample:breach"));
+    assert.ok(sim.shared.includes("sample:breach"));
+    assert.match(objective(sim, you), /loft/i);
+  });
+
+  it("loads an older save that has no pack", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    assert.ok(you);
+    const file: SaveFile = {
+      version: 2,
+      time: 12,
+      you: { region: "city", x: 80, y: 90, hp: 40, o2: 33, ammo: 3, cells: 1 },
+      discovered: ["breach-loft"],
+      explored: sim.explored,
+      flags: sim.flags,
+      taken: [],
+      vehicles: [],
+      creatures: [],
+      drops: [],
+    };
+    applySave(sim, "a", file);
+    assert.equal(you.region, "city");
+    assert.equal(you.hp, 40);
+    assert.equal(you.pack.length, 20);
+    assert.equal(you.pack.every((slot) => slot === null), true);
+    assert.equal(you.pinned, false);
+    stow(you.pack, "cell", 1);
+    const kept: SaveFile = {
+      ...file,
+      you: { ...file.you, pack: you.pack, pinned: true, beaconRegion: "breach", beaconX: 320, beaconY: 288 },
+      lockers: { "save-breach": you.pack.map((slot) => (slot ? { ...slot } : null)) },
+    };
+    const next = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    applySave(next, "a", kept);
+    const restored = findDiver(next, "a");
+    assert.ok(restored);
+    assert.equal(restored.pinned, true);
+    assert.equal(restored.beaconX, 320);
+    assert.equal(restored.pack.some((slot) => slot?.kind === "cell"), true);
+    assert.equal(next.lockers["save-breach"].some((slot) => slot?.kind === "cell"), true);
   });
 });
