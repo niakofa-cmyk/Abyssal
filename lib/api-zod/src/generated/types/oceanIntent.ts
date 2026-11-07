@@ -23,4 +23,8 @@ export interface OceanIntent {
   use?: boolean;
   repair?: boolean;
   cycle?: boolean;
+  pack?: number;
+  stow?: boolean;
+  stowIndex?: number;
+  withdraw?: number;
 }

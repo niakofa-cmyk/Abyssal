@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { Ocean } from "./ocean.ts";
 import { TILE } from "./types.ts";
 import { archiveOf } from "./archive.ts";
+import { stow } from "./pack.ts";
 
 function intent(partial: Partial<{ ax: number; ay: number; aimX: number; aimY: number; fire: boolean; use: boolean }> = {}) {
   return { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, ...partial };
@@ -17,6 +18,55 @@ function ageBeacon(ocean: Ocean, token: string, quietMs: number) {
 }
 
 describe("regional ocean", () => {
+  it("shares one breach locker between two divers", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const bo = ocean.join(null, "Bo");
+    const sim = ocean.sectors.breach;
+    const station = sim.markers.find((marker) => marker.id === "save-breach");
+    assert.ok(station);
+    for (const token of [ada, bo]) {
+      const diver = sim.divers.find((entry) => entry.id === token);
+      assert.ok(diver);
+      diver.x = station.x;
+      diver.y = station.y;
+    }
+    const adaDiver = sim.divers.find((entry) => entry.id === ada);
+    assert.ok(adaDiver);
+    stow(adaDiver.pack, "scrap", 1);
+    const packIndex = adaDiver.pack.findIndex((slot) => slot?.kind === "scrap");
+    ocean.setIntent(ada, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, stowIndex: packIndex });
+    assert.equal(sim.lockers["save-breach"].some((slot) => slot?.kind === "scrap"), true);
+    const kept = ocean.toBody();
+    assert.equal(kept.lockers?.["save-breach"]?.some((slot) => slot?.kind === "scrap"), true);
+    const revived = Ocean.revive(kept);
+    assert.equal(revived.sectors.breach.lockers["save-breach"].some((slot) => slot?.kind === "scrap"), true);
+    assert.equal(revived.sectors.reef.lockers["save-breach"], undefined);
+    assert.equal(revived.sectors.plains.lockers["save-breach"], undefined);
+    const lockerIndex = sim.lockers["save-breach"].findIndex((slot) => slot?.kind === "scrap");
+    ocean.setIntent(bo, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, withdraw: lockerIndex });
+    const boDiver = sim.divers.find((entry) => entry.id === bo);
+    assert.ok(boDiver);
+    assert.equal(boDiver.pack.some((slot) => slot?.kind === "scrap"), true);
+    assert.equal(sim.lockers["save-breach"].some((slot) => slot?.kind === "scrap"), false);
+  });
+
+  it("tells the diver which stack the blackout spilled", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const found = ocean.locate(ada);
+    assert.ok(found);
+    stow(found.diver.pack, "ammo", 2);
+    found.diver.hp = 1;
+    found.diver.iframe = 0;
+    found.diver.o2 = 0;
+    found.diver.hypoxia = 4;
+    ocean.step(0.2);
+    const text = ocean.snapshot(ada).toasts.join(" ");
+    assert.match(text, /Blackout/);
+    assert.match(text, /Lost 2 darts/);
+  });
+
   it("keeps two sectors alive while a third stays asleep", () => {
     const ocean = new Ocean();
     const ada = ocean.join(null, "Ada");

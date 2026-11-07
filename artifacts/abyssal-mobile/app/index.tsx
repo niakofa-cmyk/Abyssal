@@ -205,11 +205,27 @@ export default function HomeScreen() {
     intentRef.current.fire = held;
   }
 
-  function pulse(action: PulseAction) {
-    intentRef.current[action] = true;
+  function pulsePack(index: number) {
+    intentRef.current.pack = index;
     haptic();
     setTimeout(() => {
-      intentRef.current[action] = false;
+      if (intentRef.current.pack === index) intentRef.current.pack = undefined;
+    }, 360);
+  }
+
+  function pulseStow(index: number) {
+    intentRef.current.stowIndex = index;
+    haptic();
+    setTimeout(() => {
+      if (intentRef.current.stowIndex === index) intentRef.current.stowIndex = undefined;
+    }, 360);
+  }
+
+  function pulseWithdraw(index: number) {
+    intentRef.current.withdraw = index;
+    haptic();
+    setTimeout(() => {
+      if (intentRef.current.withdraw === index) intentRef.current.withdraw = undefined;
     }, 360);
   }
 
@@ -276,6 +292,9 @@ export default function HomeScreen() {
             onAim={setAim}
             onFire={setFire}
             onPulse={pulse}
+            onPack={pulsePack}
+            onStow={pulseStow}
+            onWithdraw={pulseWithdraw}
           />
         ) : (
           <View style={styles.reconnect}>
@@ -483,6 +502,9 @@ function DiveConsole({
   onAim,
   onFire,
   onPulse,
+  onPack,
+  onStow,
+  onWithdraw,
 }: {
   callsign: string;
   snapshot: OceanSnapshot | null;
@@ -495,6 +517,9 @@ function DiveConsole({
   onAim: (aimX: number, aimY: number) => void;
   onFire: (held: boolean) => void;
   onPulse: (action: PulseAction) => void;
+  onPack: (index: number) => void;
+  onStow: (index: number) => void;
+  onWithdraw: (index: number) => void;
 }) {
   const you = snapshot?.you;
   if (!snapshot || !you) return null;
@@ -537,6 +562,8 @@ function DiveConsole({
           <Supply label="CREW" value={neighbors.length + 1} icon="people-outline" colors={colors} />
         </View>
       </View>
+
+      <PackConsole you={you} snapshot={snapshot} colors={colors} onPack={onPack} onStow={onStow} onWithdraw={onWithdraw} />
 
       <View style={styles.sectionHeading}>
         <View>
@@ -673,8 +700,75 @@ function DiveConsole({
         )}
       </View>
       <Text style={[styles.lastPosition, { color: colors.mutedForeground }]}>
-        BEACON POSITION · {Math.round(you.x)} / {Math.round(you.y)}
+        {you.pinned ? `PIN ${you.beaconRegion?.toUpperCase() ?? ""} · ${Math.round(you.beaconX ?? you.x)} / ${Math.round(you.beaconY ?? you.y)}` : "PIN LOOSE"} · POSITION {Math.round(you.x)} / {Math.round(you.y)}
       </Text>
+    </View>
+  );
+}
+
+function slotName(kind: string) {
+  if (kind === 'o2') return 'oxygen';
+  if (kind === 'med') return 'medicine';
+  if (kind === 'ammo') return 'darts';
+  if (kind === 'cell') return 'cell';
+  if (kind === 'sample') return 'slide';
+  return 'salvage';
+}
+
+function PackConsole({
+  you,
+  snapshot,
+  colors,
+  onPack,
+  onStow,
+  onWithdraw,
+}: {
+  you: NonNullable<OceanSnapshot['you']>;
+  snapshot: OceanSnapshot;
+  colors: ReturnType<typeof useColors>;
+  onPack: (index: number) => void;
+  onStow: (index: number) => void;
+  onWithdraw: (index: number) => void;
+}) {
+  const pack = you.pack ?? [];
+  const occupied = pack.filter(Boolean).length;
+  const lockers = (snapshot.lockers ?? {}) as Record<string, Array<{ kind: string; amount: number } | null>>;
+  const locker = lockers[`save-${you.region}`] ?? [];
+  const held = locker.filter(Boolean);
+  return (
+    <View style={[styles.logCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+      <Text style={[styles.sectionEyebrow, { color: colors.primary }]}>DIVER PACK</Text>
+      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+        {occupied}/{pack.length || 20} packed · {you.pinned ? `beacon pinned` : 'beacon loose'}
+      </Text>
+      <Text style={[styles.connectionText, { color: colors.mutedForeground }]}>
+        Use draws a supply into the suit. Stow and take name one stack at the save station. File a slide with Use at the desk. The pin is not this phone's memory.
+      </Text>
+      {pack.map((slot, index) => slot ? (
+        <View key={`pack-${index}`} style={styles.logRow}>
+          <Text style={[styles.logText, { color: colors.foreground, flex: 1 }]}>{slotName(slot.kind)} ×{slot.amount}</Text>
+          <Pressable onPress={() => onPack(index)} style={[styles.secondaryButton, { borderColor: colors.border }]}>
+            <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>USE</Text>
+          </Pressable>
+          <Pressable onPress={() => onStow(index)} style={[styles.secondaryButton, { borderColor: colors.border }]}>
+            <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>STOW</Text>
+          </Pressable>
+        </View>
+      ) : null)}
+      {held.length === 0 ? (
+        <Text style={[styles.logText, { color: colors.mutedForeground }]}>Locker empty.</Text>
+      ) : held.map((slot) => {
+        const index = locker.indexOf(slot);
+        if (!slot) return null;
+        return (
+          <View key={`lock-${index}`} style={styles.logRow}>
+            <Text style={[styles.logText, { color: colors.foreground, flex: 1 }]}>locker {slotName(slot.kind)} ×{slot.amount}</Text>
+            <Pressable onPress={() => onWithdraw(index)} style={[styles.secondaryButton, { borderColor: colors.border }]}>
+              <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>TAKE</Text>
+            </Pressable>
+          </View>
+        );
+      })}
     </View>
   );
 }

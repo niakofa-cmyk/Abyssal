@@ -35,6 +35,8 @@ import {
   pressRepair,
   pressStow,
   pressUse,
+  pressWithdraw,
+  nearestStation,
   stepSim,
   velocityOf,
   hullStage,
@@ -394,6 +396,30 @@ function useLocker(session: Session) {
     return;
   }
   if (session.link.auth) pressStow(session.sim, you);
+  else note(session.sim, "The locker answers the diver who holds the depth.");
+}
+
+function stowNamed(session: Session, index: number) {
+  const you = findDiver(session.sim, session.selfId);
+  if (!you || !you.alive) return;
+  if (session.ocean) {
+    session.ocean.intent.stowIndex = index;
+    void session.ocean.flush();
+    return;
+  }
+  if (session.link.auth) pressStow(session.sim, you, index);
+  else note(session.sim, "The locker answers the diver who holds the depth.");
+}
+
+function withdrawNamed(session: Session, index: number) {
+  const you = findDiver(session.sim, session.selfId);
+  if (!you || !you.alive) return;
+  if (session.ocean) {
+    session.ocean.intent.withdraw = index;
+    void session.ocean.flush();
+    return;
+  }
+  if (session.link.auth) pressWithdraw(session.sim, you, index);
   else note(session.sim, "The locker answers the diver who holds the depth.");
 }
 
@@ -1183,6 +1209,8 @@ export function GameApp() {
         </div>
       ) : null}
 
+      {overlay === "none" ? <StationDock sessionRef={sessionRef} tick={`${hud?.pack ?? ""}:${hud?.hp ?? 0}:${hud?.region ?? ""}`} /> : null}
+
       <div className="absolute right-3 bottom-3 flex gap-2 md:right-4">
         <button type="button" className="grid size-11 place-items-center border border-line bg-deep/85" aria-label="Map" onClick={() => {
           togglePanel("map");
@@ -1272,7 +1300,8 @@ export function GameApp() {
                   <li>WASD swim or helm. A left, D right. W rises, S sinks.</li>
                   <li>The mouse aims. On a phone the right stick aims. The tick is the shot.</li>
                   <li>Space harpoon or torpedo. E board, exit, restore a nearby grid, or use a save or information station. R repairs a hull.</li>
-                  <li>I opens the pack. A full suit stows the extra. G at the save station leaves a stack in the locker, or takes the last one back.</li>
+                  <li>I opens the pack. At a save station the panel can stow or withdraw a named stack. G still moves the first pack stack, or the last locker stack.</li>
+                  <li>E at a station recovers, files, or restores a grid. A plains station needs the grid, or one piece of salvage. The beacon pin is not the browser file.</li>
                   <li>Warm conduits attract ribbon eels. Engines and weapons disturb the ecosystem. Going quietly is a choice.</li>
                   <li>Arrows and L are Imani, if she launched with you. V holds Soren in this sector.</li>
                   <li>Tab cycles seats. The helm steers. The tube fires. The pumps brace. The sea keeps the booking.</li>
@@ -1321,7 +1350,7 @@ export function GameApp() {
           <div className="border border-line bg-abyss px-6 py-5 text-center">
             <Anchor className="mx-auto size-6 text-amber" />
             <h2 className="font-display mt-2 text-3xl">Blackout</h2>
-            <p className="mt-2 text-sm text-mist">The beacon is pulling you back. Discoveries stay.</p>
+            <p className="mt-2 text-sm text-mist">{hud?.toasts.find((line) => line.startsWith("Blackout")) ?? "The beacon is pulling you back. Discoveries stay."}</p>
           </div>
         </section>
       ) : null}
@@ -1583,16 +1612,79 @@ function Chart({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
   );
 }
 
+function StationDock({ sessionRef, tick }: { sessionRef: { current: Session | null }; tick: string }) {
+  const session = sessionRef.current;
+  if (!session || !tick) return null;
+  const you = findDiver(session.sim, session.selfId);
+  if (!you?.alive || you.vehicleId) return null;
+  const station = nearestStation(session.sim, you);
+  if (!station) return null;
+  const lockerId = station.kind === "save" ? station.id : `save-${you.region}`;
+  const locker = session.sim.lockers[lockerId] ?? [];
+  const powered = you.region === "breach" || session.sim.ecology[you.region].powered;
+  return (
+    <section className="pointer-events-auto absolute top-28 left-3 z-10 max-h-[34%] w-[min(24rem,calc(100%-1.5rem))] overflow-auto border border-line bg-deep/92 p-3 md:top-auto md:bottom-4 md:max-h-[46%]">
+      <p className="text-[10px] tracking-[0.16em] text-amber uppercase">
+        {station.kind === "save" ? "Save station" : "Information desk"} · {you.region}
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-mist">
+        {you.pinned ? `Beacon pinned in ${you.beaconRegion}.` : "Beacon not pinned."} The browser file writes on its own. A shared ocean keeps the server body only after it accepts you.
+      </p>
+      {station.kind === "save" ? (
+        <button type="button" className="mt-2 h-9 w-full border border-line text-xs text-foam" onClick={() => flagUse(session)}>
+          {powered ? "Recover — pin beacon, hull, and air" : "Pin beacon — needs the grid or one salvage"}
+        </button>
+      ) : (
+        <button type="button" className="mt-2 h-9 w-full border border-line text-xs text-foam" onClick={() => flagUse(session)}>
+          {powered ? "File a slide" : "Desk dark — restore the grid"}
+        </button>
+      )}
+      {station.kind === "save" ? (
+        <div className="mt-3 grid gap-2">
+          <p className="text-[10px] tracking-[0.14em] text-mist uppercase">Pack — stow a named stack</p>
+          {you.pack.map((slot, index) =>
+            slot ? (
+              <button key={`pack-${index}`} type="button" className="h-9 border border-line px-2 text-left text-xs text-foam" onClick={() => stowNamed(session, index)}>
+                Stow {packLabel(slot.kind)} ×{slot.amount}
+              </button>
+            ) : null,
+          )}
+          <p className="text-[10px] tracking-[0.14em] text-mist uppercase">Locker — take a named stack</p>
+          {locker.map((slot, index) =>
+            slot ? (
+              <button key={`lock-${index}`} type="button" className="h-9 border border-line px-2 text-left text-xs text-foam" onClick={() => withdrawNamed(session, index)}>
+                Take {packLabel(slot.kind)} ×{slot.amount}
+              </button>
+            ) : null,
+          )}
+          {locker.every((slot) => !slot) ? <p className="text-xs text-mist">Locker empty.</p> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function flagUse(session: Session) {
+  const you = findDiver(session.sim, session.selfId);
+  if (!you) return;
+  if (session.ocean) {
+    session.ocean.intent.use = true;
+    void session.ocean.flush();
+    return;
+  }
+  if (session.link.auth) pressUse(session.sim, you);
+}
+
 function PackPanel({ sim, selfId, onUse }: { sim: Sim | undefined; selfId: string; onUse: (index: number) => void }) {
   if (!sim) return null;
   const you = findDiver(sim, selfId);
   if (!you) return null;
-  const locker = sim.lockers["save-breach"] ?? [];
+  const locker = sim.lockers[`save-${you.region}`];
   return (
     <div>
       <h2 className="font-display text-3xl">Twenty slots</h2>
       <p className="mt-2 text-sm text-mist">
-        The suit still holds what you are breathing and firing. The pack holds the rest. Pack {occupied(you.pack)}/{you.pack.length}. Locker {occupied(locker)}/{locker.length || 8}.
+        The suit still holds what you are breathing and firing. The pack holds the rest. Pack {occupied(you.pack)}/{you.pack.length}. {locker ? `Locker ${occupied(locker)}/${locker.length}.` : "No locker in this region."}
       </p>
       <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {you.pack.map((slot, index) => (
@@ -1610,7 +1702,7 @@ function PackPanel({ sim, selfId, onUse }: { sim: Sim | undefined; selfId: strin
           </li>
         ))}
       </ul>
-      <p className="mt-4 text-xs text-mist">G at the save station deposits the first stack, or withdraws the last locker stack when the pack is empty. Slides are filed at the information desk.</p>
+      <p className="mt-4 text-xs text-mist">The station panel names a stack. G still moves the first pack stack, or the last locker stack. Slides are filed at the information desk and reopen here in the archive.</p>
     </div>
   );
 }
@@ -1676,6 +1768,21 @@ function Journal({ sim, selfId }: { sim: Sim | undefined; selfId: string }) {
           </article>
         ))}
       </div>
+
+      <h3 className="mt-6 text-xs tracking-[0.16em] text-biolume uppercase">Filed slides</h3>
+      {archive.stations.filter((station) => station.id.startsWith("sample:")).length === 0 ? (
+        <p className="mt-2 text-sm text-mist">No slide filed. A desk will take one glass slide and keep it here.</p>
+      ) : (
+        <div className="mt-2 space-y-4">
+          {archive.stations.filter((station) => station.id.startsWith("sample:")).map((station) => (
+            <article key={station.id}>
+              <p className="text-[10px] tracking-[0.16em] text-biolume uppercase">{station.place}</p>
+              <h3 className="text-amber">{station.title}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-mist">{station.read ? station.body : "Another diver filed this. You have not read it."}</p>
+            </article>
+          ))}
+        </div>
+      )}
 
       <h3 className="mt-6 text-xs tracking-[0.16em] text-biolume uppercase">Stations</h3>
       {archive.stations.length === 0 ? (

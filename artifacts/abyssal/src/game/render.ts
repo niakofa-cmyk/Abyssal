@@ -204,8 +204,8 @@ export function drawSea(
       const near = !!observer?.alive && !observer.vehicleId && Math.hypot(observer.x - marker.x, observer.y - marker.y) <= 70;
       const label =
         kind === "repair" && near ? (memory.powered ? "GRID ONLINE" : "E / USE: GRID · 1 CELL") :
-        kind === "save" && near ? "E / USE: SAVE · G LOCKER" :
-        kind === "info" && near ? "E / USE: FILE" :
+        kind === "save" && near ? (regionId !== "breach" && !memory.powered ? "E PIN · GRID OR SALVAGE" : "E / USE: SAVE · G LOCKER") :
+        kind === "info" && near ? (regionId !== "breach" && !memory.powered ? "DESK DARK · RESTORE GRID" : "E / USE: FILE") :
         "";
       if (label) {
         ctx.save();

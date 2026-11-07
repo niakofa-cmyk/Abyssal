@@ -5,6 +5,8 @@
 [The original build reference](abyssal-build-reference.md) and the later
 [repository evaluation](abyssal-updated-repository-evaluation.md) are preserved verbatim.
 Their progress estimates are guidance, not measured completion.
+The open work is tracked in
+[the missing-systems checklist](abyssal-missing-systems-checklist.md).
 Update this status document as gameplay capabilities change.
 
 ## This development increment: Living Ocean foundation
@@ -59,12 +61,24 @@ Update this status document as gameplay capabilities change.
 - Pack, pin, station cooldown, beacon, and lockers ride on local saves and on the ocean diver view. A save that has none of those fields still loads.
 - No new region, species, or playable surface was added. This is not a two-browser or Railway-restart certification.
 
+## This development increment: expedition loop layers
+
+- Blackout spills one supply stack at the body and leaves the slide. The pin is not cleared. The toast names what was lost.
+- The breach station panel can recover, and can stow or withdraw a named stack. G still moves the first pack stack or the last locker stack.
+- The panel says the beacon pin, the browser file, and the server ocean are not the same save.
+- Salvage powers one recovery at a save station whose district grid is dark. The breach refuge does not ask for it.
+- A filed slide reopens from the archive. Filing still does not open the collar or change the loft.
+- The plains have one save station and one desk, with their own locker. The desk stays dark until that district grid is restored. Restoring it wakes the desk.
+- The mobile console can draw, stow, and withdraw the same ocean intent. It shows pack occupancy and whether the beacon is pinned.
+- Two divers sharing the breach locker is covered by an automated ocean test, including a save and revive. A station locker is stored only on the sector that owns it. That is not a two-browser session and not a Railway restart.
+- A blackout in the shared ocean tells that diver which pack stack was spilled. The dead screen shows the same line.
+
 ## Still unverified or not implemented
 
 - No signed-in browser-client return test or two-browser session was run; production checks used the persistent-ocean HTTP API.
 - No PostgreSQL service restart, database disaster-recovery test, multiplayer load test, or multiplayer capacity certification has run. The web-service restart did not certify healthy health/oxygen continuity.
-- The breach now has one save station, one information desk, and a 20-slot pack. There is no network of stations, no redesigned full-death inventory loss, and no pack shared live between two browsers beyond the ocean snapshot of the diver who carries it.
-- No new regions, species, or surface/trench campaign destinations have been added.
+- The breach refuge and the plains pair are in. City, works, and reef still have no save station or desk. Blackout spills one supply stack; it is not a full expedition wipe.
+- No new species or surface/trench campaign destinations have been added. The plains stations are in a region that already existed.
 
 ## What this does not claim
 

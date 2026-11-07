@@ -382,6 +382,8 @@ export function buildLayout() {
     { id: "m7", region: "plains", x: 100 * TILE, y: 6 * TILE, kind: "lore", logId: "plains-maw" },
     { id: "m8", region: "plains", x: 168 * TILE, y: 8 * TILE, kind: "lore", logId: "plains-surface" },
     { id: "m9", region: "plains", x: 36 * TILE, y: 10 * TILE, kind: "repair" },
+    { id: "save-plains", region: "plains", x: 12 * TILE, y: 10 * TILE, kind: "save" },
+    { id: "info-plains", region: "plains", x: 18 * TILE, y: 10 * TILE, kind: "info", logId: "plains-desk" },
     { id: "m10", region: "city", x: 18 * TILE, y: 6 * TILE, kind: "lore", logId: "city-barrow" },
     { id: "m11", region: "city", x: 70 * TILE, y: 11 * TILE, kind: "lore", logId: "city-tram" },
     { id: "m12", region: "city", x: 16 * TILE, y: 12 * TILE, kind: "repair" },

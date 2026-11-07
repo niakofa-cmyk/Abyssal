@@ -29,6 +29,18 @@ export const LOGS: Record<string, LogEntry> = {
     title: "Filed slide — breach silt",
     body: "The desk kept one glass slide from the breach. Silt, a thread of conduit growth, and no name. The expedition has the finding. The collar does not open for it.",
   },
+  "plains-desk": {
+    title: "Plains desk — dark until the grid",
+    body: "This desk does not wake with the breach refuge. Restore the district grid and it will take a slide. The save station beside it can burn one piece of salvage if the grid is still dark.",
+  },
+  "plains-signal": {
+    title: "Plains grid — the desk answers",
+    body: "Power on the plains repair wakes the information desk. The signal is only the desk coming on. It is not the collar, and it is not the surface.",
+  },
+  "sample:plains": {
+    title: "Filed slide — plains silt",
+    body: "A glass slide from the plains desk. Dark water, a warm conduit, and no name. The expedition can reopen this record. The collar stays shut.",
+  },
   "breach-loft": {
     title: "A name in the loft glass",
     body: "Someone wrote a name in the condensation, and a date that is only a month. Under it: oranges on Friday if the tram runs. The glass is cracked. The name is not.",

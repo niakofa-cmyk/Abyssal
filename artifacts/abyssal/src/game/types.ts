@@ -138,6 +138,8 @@ export type Pickup = {
   reward?: boolean;
   /** Reward stacks can be collected partially when a diver has limited capacity. */
   amount?: number;
+  /** A spilled pack stack. Amount is pack units, not suit units. */
+  stack?: boolean;
 };
 
 export type Marker = {

@@ -13,6 +13,8 @@ const intent = z.object({
   cycle: z.boolean().optional(),
   pack: z.number().int().optional(),
   stow: z.boolean().optional(),
+  stowIndex: z.number().int().optional(),
+  withdraw: z.number().int().optional(),
 });
 
 const bodySchema = z.discriminatedUnion("action", [

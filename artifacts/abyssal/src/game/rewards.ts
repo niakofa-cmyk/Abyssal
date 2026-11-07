@@ -81,7 +81,7 @@ export function reviveRewardDrops(value: unknown, regions: Sim["regions"]): Pick
         !Number.isInteger(pickup.amount) || pickup.amount! < 1 || pickup.amount! > 64 ||
         typeof pickup.taken !== "boolean") continue;
     seen.add(pickup.id);
-    result.push({
+    const revived: Pickup = {
       id: pickup.id,
       region,
       kind: pickup.kind!,
@@ -90,7 +90,9 @@ export function reviveRewardDrops(value: unknown, regions: Sim["regions"]): Pick
       amount: pickup.amount,
       reward: true,
       taken: pickup.taken,
-    });
+    };
+    if (pickup.stack === true) revived.stack = true;
+    result.push(revived);
   }
   return result;
 }

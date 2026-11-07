@@ -7,6 +7,7 @@ import {
   pressRepair,
   pressStow,
   pressUse,
+  pressWithdraw,
   stepSim,
 } from "./sim.ts";
 import { TILE, ZONES, type Facing, type Projectile, type RegionId, type Seat, type Sim, type Vehicle } from "./types.ts";
@@ -28,8 +29,12 @@ export type OceanIntent = {
   cycle?: boolean;
   /** Use this pack slot. */
   pack?: number;
-  /** Deposit or withdraw at the save station. */
+  /** Deposit the first pack stack, or withdraw the last locker stack. */
   stow?: boolean;
+  /** Deposit this pack slot at the save station. */
+  stowIndex?: number;
+  /** Withdraw this locker slot. */
+  withdraw?: number;
 };
 
 export type SectorReport = {
@@ -63,6 +68,9 @@ export type DiverView = {
   pack?: Array<PackSlot | null>;
   pinned?: boolean;
   stationCd?: number;
+  beaconX?: number;
+  beaconY?: number;
+  beaconRegion?: RegionId;
 };
 
 export type OceanSnap = {
@@ -207,6 +215,8 @@ function createRegionSim(id: RegionId): Sim {
   sim.pickups = sim.pickups.filter((p) => p.region === id);
   sim.markers = sim.markers.filter((m) => m.region === id);
   sim.divers = [];
+  const owned = new Set(sim.markers.filter((marker) => marker.kind === "save").map((marker) => marker.id));
+  sim.lockers = Object.fromEntries(Object.entries(sim.lockers).filter(([lockerId]) => owned.has(lockerId)));
   return sim;
 }
 
@@ -232,6 +242,9 @@ function viewDiver(d: Sim["divers"][number]): DiverView {
     pack: d.pack.map((slot) => (slot ? { ...slot } : null)),
     pinned: d.pinned,
     stationCd: d.stationCd,
+    beaconX: d.beaconX,
+    beaconY: d.beaconY,
+    beaconRegion: d.beaconRegion,
   };
 }
 
@@ -359,7 +372,9 @@ export class Ocean {
       }
     }
     if (Number.isInteger(intent.pack)) this.actPack(sim, diver, intent.pack as number);
-    if (intent.stow) this.actStow(sim, diver);
+    if (Number.isInteger(intent.stowIndex)) this.actStow(sim, diver, intent.stowIndex as number);
+    else if (intent.stow) this.actStow(sim, diver);
+    if (Number.isInteger(intent.withdraw)) this.actWithdraw(sim, diver, intent.withdraw as number);
   }
 
   step(dt: number) {
@@ -392,6 +407,12 @@ export class Ocean {
       }
       this.pullFlags(sim);
       for (const event of sim.events) {
+        if (event.startsWith("deadnote:")) {
+          const body = event.slice("deadnote:".length);
+          const cut = body.indexOf(":");
+          if (cut > 0) this.toast(body.slice(0, cut), body.slice(cut + 1));
+          continue;
+        }
         for (const diver of sim.divers) {
           const player = this.players.get(diver.id);
           if (!player || player.adrift) continue;
@@ -485,7 +506,7 @@ export class Ocean {
       found: this.found,
       explored: player.explored,
       roster: this.roster(),
-      lockers: this.sectors.breach.lockers,
+      lockers: this.allLockers(),
     };
   }
 
@@ -594,7 +615,7 @@ export class Ocean {
       sectors,
       divers,
       found: this.found,
-      lockers: this.sectors.breach.lockers,
+      lockers: this.allLockers(),
       players: [...this.players.values()].map((p) => ({
         token: p.token,
         callsign: p.callsign,
@@ -615,9 +636,10 @@ export class Ocean {
     }
     ocean.found = [...found];
     if (body.lockers) {
-      ocean.sectors.breach.lockers = {};
       for (const [id, slots] of Object.entries(body.lockers)) {
-        ocean.sectors.breach.lockers[id] = revivePack(slots, id === "save-breach" ? 8 : 20);
+        const pack = revivePack(slots, id.startsWith("save-") ? LOCKER_SLOTS : 20);
+        const region = ocean.sectors.breach.markers.find((marker) => marker.id === id)?.region ?? "breach";
+        ocean.sectors[region].lockers[id] = pack;
       }
     }
     for (const id of REGIONS) {
@@ -867,10 +889,28 @@ export class Ocean {
     for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
   }
 
-  private actStow(sim: Sim, diver: Sim["divers"][number]) {
+  private actStow(sim: Sim, diver: Sim["divers"][number], packIndex?: number) {
     const toastId = sim.toastId;
-    pressStow(sim, diver);
+    pressStow(sim, diver, packIndex);
     for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
+  }
+
+  private actWithdraw(sim: Sim, diver: Sim["divers"][number], lockerIndex: number) {
+    const toastId = sim.toastId;
+    pressWithdraw(sim, diver, lockerIndex);
+    for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
+  }
+
+  private allLockers() {
+    const lockers: NonNullable<OceanSnap["lockers"]> = {};
+    for (const id of REGIONS) {
+      const sim = this.sectors[id];
+      for (const [lockerId, slots] of Object.entries(sim.lockers)) {
+        const marker = sim.markers.find((item) => item.id === lockerId);
+        if (marker?.kind === "save" && marker.region === id) lockers[lockerId] = slots;
+      }
+    }
+    return lockers;
   }
 
   private keepRecords(token: string, sim: Sim) {
@@ -1126,6 +1166,9 @@ export function applyOceanView(sim: Sim, selfId: string, snap: OceanSnap) {
     if (saved.pack) local.pack = revivePack(saved.pack);
     if (typeof saved.pinned === "boolean") local.pinned = saved.pinned;
     if (Number.isFinite(saved.stationCd)) local.stationCd = saved.stationCd!;
+    if (Number.isFinite(saved.beaconX)) local.beaconX = saved.beaconX!;
+    if (Number.isFinite(saved.beaconY)) local.beaconY = saved.beaconY!;
+    if (saved.beaconRegion) local.beaconRegion = saved.beaconRegion;
     if (saved.id !== selfId) {
       local.aimX = saved.aimX;
       local.aimY = saved.aimY;

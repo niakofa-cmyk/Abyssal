@@ -43,6 +43,10 @@ export interface OceanIntent {
   use?: boolean;
   repair?: boolean;
   cycle?: boolean;
+  pack?: number;
+  stow?: boolean;
+  stowIndex?: number;
+  withdraw?: number;
 }
 
 export interface OceanSyncRequest {
@@ -123,6 +127,12 @@ export interface DiverView {
   alive: boolean;
   vehicleId?: string | null;
   seat?: string | null;
+  pinned?: boolean;
+  stationCd?: number;
+  beaconX?: number;
+  beaconY?: number;
+  beaconRegion?: DiverViewRegion;
+  pack?: Array<{ kind: string; amount: number; from?: string } | null>;
 }
 
 export interface EcologyPoint {

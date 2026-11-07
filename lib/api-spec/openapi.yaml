@@ -127,6 +127,14 @@ components:
           type: boolean
         cycle:
           type: boolean
+        pack:
+          type: integer
+        stow:
+          type: boolean
+        stowIndex:
+          type: integer
+        withdraw:
+          type: integer
       required: [ax, ay, aimX, aimY, fire]
     OceanSyncRequest:
       type: object
@@ -223,6 +231,31 @@ components:
           oneOf:
             - type: string
             - type: "null"
+        pinned:
+          type: boolean
+        stationCd:
+          type: number
+        beaconX:
+          type: number
+        beaconY:
+          type: number
+        beaconRegion:
+          type: string
+          enum: [breach, plains, city, works, reef]
+        pack:
+          type: array
+          items:
+            oneOf:
+              - type: "null"
+              - type: object
+                required: [kind, amount]
+                properties:
+                  kind:
+                    type: string
+                  amount:
+                    type: integer
+                  from:
+                    type: string
       required: [id, name, region, x, y, facing, aimX, aimY, hp, o2, ammo, cells, alive]
     EcologyPoint:
       type: object

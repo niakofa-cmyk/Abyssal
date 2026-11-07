@@ -71,6 +71,8 @@ export class OceanClient {
     this.intent.cycle = false;
     this.intent.pack = undefined;
     this.intent.stow = false;
+    this.intent.stowIndex = undefined;
+    this.intent.withdraw = undefined;
     try {
       const data = await post({ action: "sync", token: this.token, input });
       if (!this.sim || !data.snap) return;

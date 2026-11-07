@@ -24,4 +24,10 @@ export interface DiverView {
   alive: boolean;
   vehicleId?: string | null;
   seat?: string | null;
+  pinned?: boolean;
+  stationCd?: number;
+  beaconX?: number;
+  beaconY?: number;
+  beaconRegion?: DiverViewRegion;
+  pack?: Array<{ kind: string; amount: number; from?: string } | null>;
 }

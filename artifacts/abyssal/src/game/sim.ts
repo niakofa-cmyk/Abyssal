@@ -19,7 +19,7 @@ import { isSolid, tileAt, buildLayout } from "./world.ts";
 import { casesClosedBy } from "./archive.ts";
 import { advanceEcology, createEcology, emitNoise, restorePower, ECOLOGY_EVENTS } from "./ecology.ts";
 import { CREATURE_RESPAWN_RULES, MAX_REWARD_DROPS, rewardForDefeat, reviveRewardDrops } from "./rewards.ts";
-import { LOCKER_SLOTS, SUPPLY_YIELD, drawOne, emptyPack, isPackKind, occupied, packLabel, stow } from "./pack.ts";
+import { LOCKER_SLOTS, SUPPLY_YIELD, drawOne, emptyPack, isPackKind, occupied, packLabel, stow, supplyIndex } from "./pack.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -169,7 +169,7 @@ export function createSim(opts: SpawnOpts): Sim {
     projectiles: [],
     pickups: layout.pickups,
     markers: layout.markers,
-    lockers: { "save-breach": emptyPack(LOCKER_SLOTS) },
+    lockers: { "save-breach": emptyPack(LOCKER_SLOTS), "save-plains": emptyPack(LOCKER_SLOTS) },
     taken: [],
     discovered: [],
     shared: [],
@@ -695,6 +695,26 @@ function strikeDiver(sim: Sim, diver: Diver, dmg: number, _fromWorld: boolean) {
   hurtDiver(sim, diver.id, dmg);
 }
 
+function spillSupply(sim: Sim, diver: Diver) {
+  const index = supplyIndex(diver.pack);
+  if (index < 0) return null;
+  const slot = diver.pack[index];
+  if (!slot || slot.kind === "sample" || slot.kind === "scrap") return null;
+  diver.pack[index] = null;
+  sim.pickups.push({
+    id: `reward:spill.${diver.id}:${sim.nextId++}`,
+    region: diver.region,
+    kind: slot.kind,
+    x: diver.x,
+    y: diver.y,
+    amount: slot.amount,
+    reward: true,
+    stack: true,
+    taken: false,
+  });
+  return { kind: slot.kind, amount: slot.amount };
+}
+
 export function hurtDiver(sim: Sim, id: string, dmg: number) {
   const diver = findDiver(sim, id);
   if (!diver || !diver.alive || diver.iframe > 0) return;
@@ -716,8 +736,13 @@ export function hurtDiver(sim: Sim, id: string, dmg: number) {
     diver.alive = false;
     diver.respawn = diver.kind === "you" ? 2.6 : 4.5;
     if (diver.vehicleId) leaveSeat(sim, diver);
+    const lost = spillSupply(sim, diver);
+    const line = lost
+      ? `Blackout. Lost ${lost.amount} ${packLabel(lost.kind)}. The beacon still has your name.`
+      : "Blackout. The beacon still has your name.";
     sim.events.push(`dead:${diver.id}`);
-    if (diver.kind === "you") note(sim, "Blackout. The beacon still has your name.");
+    sim.events.push(`deadnote:${diver.id}:${line}`);
+    note(sim, line);
   }
 }
 
@@ -845,6 +870,10 @@ function nearestMarker(sim: Sim, diver: Diver, kinds: Marker["kind"][]) {
   return best;
 }
 
+export function nearestStation(sim: Sim, diver: Diver) {
+  return nearestMarker(sim, diver, ["save", "info"]);
+}
+
 function suitRoom(diver: Diver, kind: "o2" | "med" | "ammo" | "cell") {
   if (kind === "o2") return Math.max(0, diver.o2Max - diver.o2);
   if (kind === "med") return Math.max(0, diver.hpMax - diver.hp);
@@ -859,8 +888,23 @@ function useSaveStation(sim: Sim, diver: Diver, station: Marker) {
   diver.beaconRegion = station.region;
   sim.events.push("beacon");
   if (sim.time < diver.stationCd) {
-    note(sim, "Beacon held at the save station. The pumps are still cycling.");
+    note(sim, "Beacon held at the save station. The pumps are still cycling. This pin is not the browser file.");
     return;
+  }
+  const refuge = station.region === "breach" || sim.ecology[station.region].powered;
+  const room = diver.hp < diver.hpMax || diver.o2 < diver.o2Max;
+  if (!refuge) {
+    if (!room) {
+      note(sim, "Beacon pinned. Hull and air are already full. Salvage stays packed.");
+      return;
+    }
+    const scrap = diver.pack.findIndex((slot) => slot?.kind === "scrap");
+    if (scrap < 0) {
+      note(sim, "Beacon pinned. The pumps need the district grid, or one piece of salvage. The browser file and the server ocean are separate.");
+      return;
+    }
+    drawOne(diver.pack, scrap);
+    note(sim, "Salvage burns. The pumps run once without the grid.");
   }
   const beforeHp = diver.hp;
   const beforeO2 = diver.o2;
@@ -871,10 +915,14 @@ function useSaveStation(sim: Sim, diver: Diver, station: Marker) {
   diver.stationCd = sim.time + 20;
   const gainedHp = Math.round(diver.hp - beforeHp);
   const gainedO2 = Math.round(diver.o2 - beforeO2);
-  note(sim, `Beacon set. The station returns ${gainedHp} hull and ${gainedO2} air. It holds until you black out.`);
+  note(sim, `Beacon set. The station returns ${gainedHp} hull and ${gainedO2} air. The browser file and the server ocean are separate.`);
 }
 
 function useInfoStation(sim: Sim, diver: Diver, station: Marker) {
+  if (station.region !== "breach" && !sim.ecology[diver.region].powered) {
+    note(sim, "The desk is dark. Restore the district grid and it will take a slide.");
+    return;
+  }
   if (station.logId) {
     const before = sim.discovered.slice();
     discover(sim, station.logId);
@@ -882,18 +930,25 @@ function useInfoStation(sim: Sim, diver: Diver, station: Marker) {
   }
   const sample = diver.pack.findIndex((slot) => slot?.kind === "sample");
   if (sample >= 0) {
+    const origin = diver.pack[sample]?.from;
+    const filedRegion = origin === "breach" || origin === "plains" || origin === "city" || origin === "works" || origin === "reef"
+      ? origin
+      : station.region;
     drawOne(diver.pack, sample);
-    const id = `sample:${diver.region}`;
+    const id = `sample:${filedRegion}`;
     discover(sim, id);
     if (!sim.shared.includes(id)) sim.shared.push(id);
-    note(sim, "Slide filed. The expedition keeps the finding.");
+    note(sim, "Slide filed. The expedition keeps the finding. Reopen it in the archive.");
     sim.events.push("filed");
     return;
   }
-  if (!sim.discovered.includes("breach-slide")) {
+  const slideId = `${station.region}-slide`;
+  if (!sim.discovered.includes(slideId)) {
     if (stow(diver.pack, "sample", 1) > 0) note(sim, "A glass slide, and no room in the pack.");
     else {
-      discover(sim, "breach-slide");
+      const taken = diver.pack.find((slot) => slot?.kind === "sample" && !slot.from);
+      if (taken) taken.from = station.region;
+      discover(sim, slideId);
       note(sim, "A glass slide from the desk. It goes in the pack. File it here when you are ready.");
     }
     return;
@@ -906,7 +961,7 @@ export function pressPack(sim: Sim, diver: Diver, index: number) {
   const slot = diver.pack[index];
   if (!slot) return;
   if (slot.kind === "sample" || slot.kind === "scrap") {
-    note(sim, slot.kind === "sample" ? "A glass slide. The information desk can file it." : "Salvage. The save station can hold it.");
+    note(sim, slot.kind === "sample" ? "A glass slide. The information desk can file it." : "Salvage. A dark save station can burn one piece to run the pumps.");
     return;
   }
   if (suitRoom(diver, slot.kind) <= 0) {
@@ -920,7 +975,7 @@ export function pressPack(sim: Sim, diver: Diver, index: number) {
   sim.events.push("pack");
 }
 
-export function pressStow(sim: Sim, diver: Diver) {
+export function pressStow(sim: Sim, diver: Diver, packIndex?: number) {
   if (!diver.alive || diver.vehicleId) return;
   const station = nearestMarker(sim, diver, ["save"]);
   if (!station) {
@@ -928,8 +983,12 @@ export function pressStow(sim: Sim, diver: Diver) {
     return;
   }
   const locker = sim.lockers[station.id] ?? (sim.lockers[station.id] = emptyPack(LOCKER_SLOTS));
-  const index = diver.pack.findIndex(Boolean);
-  if (index >= 0) {
+  const index = packIndex ?? diver.pack.findIndex(Boolean);
+  if (packIndex !== undefined && !diver.pack[index]) {
+    note(sim, "That pack slot is empty.");
+    return;
+  }
+  if (index >= 0 && diver.pack[index]) {
     const slot = diver.pack[index]!;
     const left = stow(locker, slot.kind, slot.amount);
     if (left === slot.amount) {
@@ -937,10 +996,11 @@ export function pressStow(sim: Sim, diver: Diver) {
       return;
     }
     diver.pack[index] = left > 0 ? { kind: slot.kind, amount: left } : null;
-    note(sim, `${packLabel(slot.kind)} left in the station locker. Pack ${occupied(diver.pack)}/${diver.pack.length}.`);
+    note(sim, `${packLabel(slot.kind)} ×${slot.amount - left} left in the ${station.region} locker.`);
     sim.events.push("stow");
     return;
   }
+  if (packIndex !== undefined) return;
   for (let i = locker.length - 1; i >= 0; i -= 1) {
     const slot = locker[i];
     if (!slot) continue;
@@ -950,11 +1010,34 @@ export function pressStow(sim: Sim, diver: Diver) {
       return;
     }
     locker[i] = left > 0 ? { kind: slot.kind, amount: left } : null;
-    note(sim, `${packLabel(slot.kind)} back in the pack.`);
+    note(sim, `${packLabel(slot.kind)} ×${slot.amount - left} back in the pack.`);
     sim.events.push("stow");
     return;
   }
   note(sim, "The locker is empty.");
+}
+
+export function pressWithdraw(sim: Sim, diver: Diver, lockerIndex: number) {
+  if (!diver.alive || diver.vehicleId) return;
+  const station = nearestMarker(sim, diver, ["save"]);
+  if (!station) {
+    note(sim, "The save station can hold a pack stack.");
+    return;
+  }
+  const locker = sim.lockers[station.id] ?? (sim.lockers[station.id] = emptyPack(LOCKER_SLOTS));
+  const slot = locker[lockerIndex];
+  if (!slot) {
+    note(sim, "That locker slot is empty.");
+    return;
+  }
+  const left = stow(diver.pack, slot.kind, slot.amount);
+  if (left === slot.amount) {
+    note(sim, "The pack has no room for the locker.");
+    return;
+  }
+  locker[lockerIndex] = left > 0 ? { kind: slot.kind, amount: left } : null;
+  note(sim, `${packLabel(slot.kind)} ×${slot.amount - left} back in the pack.`);
+  sim.events.push("stow");
 }
 
 export function pressUse(sim: Sim, diver: Diver) {
@@ -979,6 +1062,10 @@ export function pressUse(sim: Sim, diver: Diver) {
       if (diver.kind === "remote") sim.outbox.push({ k: "grant", id: diver.id, kind: "cell", amount: -1 });
       note(sim, ECOLOGY_EVENTS.power);
       sim.events.push("repair");
+      if (diver.region !== "breach" && sim.markers.some((marker) => marker.kind === "info" && marker.region === diver.region)) {
+        discover(sim, `${diver.region}-signal`);
+        note(sim, "The district grid wakes the desk. It will take a slide.");
+      }
       return;
     }
     note(sim, "One energy cell would restore this district grid. Restoring it will attract life.");
@@ -1572,6 +1659,15 @@ function stepPickups(sim: Sim) {
       if (!diver.alive || diver.region !== pickup.region || diver.vehicleId) continue;
       const reach = hypot(pickup.x - diver.x, pickup.y - diver.y);
       if (reach > 40) continue;
+      if (pickup.stack && isPackKind(pickup.kind)) {
+        const want = pickup.amount ?? 1;
+        const left = stow(diver.pack, pickup.kind, want);
+        if (left === want) continue;
+        if (pickup.reward && left > 0) pickup.amount = left;
+        else pickup.taken = true;
+        if (diver.kind === "you") note(sim, `${packLabel(pickup.kind)} back in the pack.`);
+        break;
+      }
       const amount = pickup.amount ?? (pickup.kind === "o2" ? 52 : pickup.kind === "med" ? 38 : pickup.kind === "ammo" ? 8 : 1);
       const intoSuit = Math.min(amount, suitRoom(diver, pickup.kind));
       let left = amount - intoSuit;

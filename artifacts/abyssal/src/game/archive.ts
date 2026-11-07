@@ -59,6 +59,21 @@ export const STATIONS: Record<string, { kind: StationKind; place: string; missin
     place: "Breach desk",
     missing: "a filed glass slide from the breach",
   },
+  "plains-desk": {
+    kind: "engineering",
+    place: "Plains desk",
+    missing: "the plains station card",
+  },
+  "plains-signal": {
+    kind: "engineering",
+    place: "Plains grid",
+    missing: "the desk the plains grid wakes",
+  },
+  "sample:plains": {
+    kind: "research",
+    place: "Plains desk",
+    missing: "a filed glass slide from the plains",
+  },
   "plains-city": {
     kind: "history",
     place: "Plains",

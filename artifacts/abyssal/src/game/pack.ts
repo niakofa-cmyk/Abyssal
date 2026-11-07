@@ -2,7 +2,9 @@ export const PACK_SLOTS = 20;
 export const LOCKER_SLOTS = 8;
 
 export type PackKind = "o2" | "med" | "ammo" | "cell" | "sample" | "scrap";
-export type PackSlot = { kind: PackKind; amount: number };
+export type PackSlot = { kind: PackKind; amount: number; from?: string };
+
+const REGIONS = new Set(["breach", "plains", "city", "works", "reef"]);
 
 const LIMIT: Record<PackKind, number> = {
   o2: 4,
@@ -35,7 +37,12 @@ export function revivePack(value: unknown, slots = PACK_SLOTS): Array<PackSlot |
     const amount = (slot as { amount?: unknown }).amount;
     if (typeof kind !== "string" || !isPackKind(kind)) continue;
     if (!Number.isInteger(amount) || (amount as number) < 1 || (amount as number) > LIMIT[kind]) continue;
-    pack[i] = { kind, amount: amount as number };
+    const from = (slot as { from?: unknown }).from;
+    pack[i] = {
+      kind,
+      amount: amount as number,
+      ...(kind === "sample" && typeof from === "string" && REGIONS.has(from) ? { from } : {}),
+    };
   }
   return pack;
 }
@@ -66,6 +73,10 @@ export function drawOne(pack: Array<PackSlot | null>, index: number): PackKind |
   const kind = slot.kind;
   if (slot.amount <= 0) pack[index] = null;
   return kind;
+}
+
+export function supplyIndex(pack: Array<PackSlot | null>) {
+  return pack.findIndex((slot) => slot && slot.kind !== "sample" && slot.kind !== "scrap");
 }
 
 export function occupied(pack: Array<PackSlot | null> | undefined) {
