@@ -61,6 +61,17 @@ export function note(sim: Sim, text: string) {
   sim.toasts = sim.toasts.slice(0, 4);
 }
 
+/** A local diver, or a human body on the shared ocean. Not a crew mate. */
+function hears(diver: Diver) {
+  return diver.kind === "you" || diver.tint === "remote";
+}
+
+/** Local play reads the sim toast. The ocean reads `said:` after the step. */
+function say(sim: Sim, diver: Diver, text: string) {
+  if (diver.kind === "you") note(sim, text);
+  else if (diver.tint === "remote") sim.events.push(`said:${diver.id}:${text}`);
+}
+
 export function discover(sim: Sim, id: string) {
   if (sim.discovered.includes(id)) return;
   sim.discovered.push(id);
@@ -734,15 +745,14 @@ export function hurtDiver(sim: Sim, id: string, dmg: number) {
   if (diver.hp <= 0) {
     diver.hp = 0;
     diver.alive = false;
-    diver.respawn = diver.kind === "you" ? 2.6 : 4.5;
+    diver.respawn = hears(diver) ? 2.6 : 4.5;
     if (diver.vehicleId) leaveSeat(sim, diver);
     const lost = spillSupply(sim, diver);
     const line = lost
       ? `Blackout. Lost ${lost.amount} ${packLabel(lost.kind)}. The beacon still has your name.`
       : "Blackout. The beacon still has your name.";
     sim.events.push(`dead:${diver.id}`);
-    sim.events.push(`deadnote:${diver.id}:${line}`);
-    note(sim, line);
+    say(sim, diver, line);
   }
 }
 
@@ -800,7 +810,7 @@ function board(sim: Sim, diver: Diver, vehicle: Vehicle) {
         ? "engineer"
         : null;
   if (!seat) {
-    if (diver.kind === "you") note(sim, vehicle.kind === "barrow" ? "All three seats are taken." : "Both seats are taken.");
+    if (hears(diver)) note(sim, vehicle.kind === "barrow" ? "All three seats are taken." : "Both seats are taken.");
     return;
   }
   takeSeat(sim, diver, vehicle, seat);
@@ -926,7 +936,7 @@ function useInfoStation(sim: Sim, diver: Diver, station: Marker) {
   if (station.logId) {
     const before = sim.discovered.slice();
     discover(sim, station.logId);
-    if (sim.discovered.length !== before.length && diver.kind === "you") note(sim, "The desk keeps a record. It is in the journal.");
+    if (sim.discovered.length !== before.length && hears(diver)) note(sim, "The desk keeps a record. It is in the journal.");
   }
   const sample = diver.pack.findIndex((slot) => slot?.kind === "sample");
   if (sample >= 0) {
@@ -971,7 +981,7 @@ export function pressPack(sim: Sim, diver: Diver, index: number) {
   const kind = drawOne(diver.pack, index);
   if (!kind || kind === "sample" || kind === "scrap") return;
   grant(sim, diver, kind, SUPPLY_YIELD[kind]);
-  if (diver.kind === "you") note(sim, `${packLabel(kind)} from the pack.`);
+  if (hears(diver)) note(sim, `${packLabel(kind)} from the pack.`);
   sim.events.push("pack");
 }
 
@@ -1115,14 +1125,14 @@ export function pressRepair(sim: Sim, diver: Diver) {
     }
   }
   if (!best) {
-    if (diver.kind === "you") note(sim, "No hull close enough to take the cell.");
+    if (hears(diver)) note(sim, "No hull close enough to take the cell.");
     return;
   }
   diver.cells -= 1;
   best.destroyed = false;
   best.hull = clamp(best.hull + craftOf(best.kind).repair, 1, best.hullMax);
   best.energy = clamp(best.energy + 45, 0, best.energyMax);
-  if (diver.kind === "you") note(sim, `${hullName(best.kind)} takes the cell. She will swim.`);
+  if (hears(diver)) note(sim, `${hullName(best.kind)} takes the cell. She will swim.`);
   sim.events.push("repair");
 }
 
@@ -1269,7 +1279,7 @@ function tryFire(sim: Sim, diver: Diver) {
       vehicle.shieldCd = 2.7;
       vehicle.energy -= 16;
       sim.events.push("shield");
-      if (diver.kind === "you") note(sim, "Brace up. The skin will take the next bite.");
+      say(sim, diver, "Brace up. The skin will take the next bite.");
       return;
     }
     const shooterId = vehicle.seats.gunner ?? vehicle.seats.pilot;
@@ -1498,7 +1508,7 @@ function stepDiverBody(sim: Sim, diver: Diver, dt: number, selfId: string) {
       diver.vx = 0;
       diver.vy = 0;
       unstick(sim, diver);
-      if (diver.kind === "you") note(sim, "You come back on the beacon. Less air than before.");
+      say(sim, diver, "You come back on the beacon. Less air than before.");
     }
     return;
   }
@@ -1625,9 +1635,10 @@ function explore(sim: Sim, diver: Diver) {
     if (vehicle.kind === "scooter") sim.flags.scooterSeen = true;
     if (vehicle.kind === "kite") sim.flags.kiteSeen = true;
     if (vehicle.kind === "barrow") sim.flags.barrowSeen = true;
-    if (diver.kind === "you") {
-      note(
+    if (hears(diver)) {
+      say(
         sim,
+        diver,
         vehicle.kind === "barrow"
           ? "Barrow. Helm, tube, and pumps. She was built for the furnaces."
           : vehicle.kind === "kite"
@@ -1665,7 +1676,7 @@ function stepPickups(sim: Sim) {
         if (left === want) continue;
         if (pickup.reward && left > 0) pickup.amount = left;
         else pickup.taken = true;
-        if (diver.kind === "you") note(sim, `${packLabel(pickup.kind)} back in the pack.`);
+        say(sim, diver, `${packLabel(pickup.kind)} back in the pack.`);
         break;
       }
       const amount = pickup.amount ?? (pickup.kind === "o2" ? 52 : pickup.kind === "med" ? 38 : pickup.kind === "ammo" ? 8 : 1);
@@ -1674,7 +1685,7 @@ function stepPickups(sim: Sim) {
       if (intoSuit > 0) collect(sim, diver, pickup.kind, intoSuit);
       if (left > 0 && isPackKind(pickup.kind)) left = stow(diver.pack, pickup.kind, left);
       if (intoSuit === 0 && left === amount) continue;
-      if (intoSuit === 0 && diver.kind === "you") note(sim, `${packLabel(pickup.kind)} stowed. Pack ${occupied(diver.pack)}/${diver.pack.length}.`);
+      if (intoSuit === 0) say(sim, diver, `${packLabel(pickup.kind)} stowed. Pack ${occupied(diver.pack)}/${diver.pack.length}.`);
       if (pickup.reward && left > 0) pickup.amount = left;
       else pickup.taken = true;
       break;

@@ -332,9 +332,11 @@ export class Ocean {
     found.diver.vy = 0;
     found.diver.netX = x;
     found.diver.netY = y;
-    found.diver.beaconRegion = region;
-    found.diver.beaconX = x;
-    found.diver.beaconY = y;
+    if (!found.diver.pinned) {
+      found.diver.beaconRegion = region;
+      found.diver.beaconX = x;
+      found.diver.beaconY = y;
+    }
     this.sectors[region].divers.push(found.diver);
   }
 
@@ -357,9 +359,9 @@ export class Ocean {
     diver.fireLatch = !!intent.fire;
     if (intent.use) this.actUse(sim, diver);
     if (intent.repair) {
-      const cells = diver.cells;
+      const toastId = sim.toastId;
       pressRepair(sim, diver);
-      if (diver.cells < cells) this.toast(diver.id, "The cell takes. The hull drinks it.");
+      for (const crumb of sim.toasts.filter((toast) => toast.id > toastId)) this.toast(diver.id, crumb.text);
     }
     if (intent.cycle) {
       const seat = diver.seat;
@@ -407,8 +409,8 @@ export class Ocean {
       }
       this.pullFlags(sim);
       for (const event of sim.events) {
-        if (event.startsWith("deadnote:")) {
-          const body = event.slice("deadnote:".length);
+        if (event.startsWith("said:")) {
+          const body = event.slice("said:".length);
           const cut = body.indexOf(":");
           if (cut > 0) this.toast(body.slice(0, cut), body.slice(cut + 1));
           continue;

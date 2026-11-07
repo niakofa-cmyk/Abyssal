@@ -65,6 +65,38 @@ describe("regional ocean", () => {
     const text = ocean.snapshot(ada).toasts.join(" ");
     assert.match(text, /Blackout/);
     assert.match(text, /Lost 2 darts/);
+    ocean.step(3);
+    assert.match(ocean.snapshot(ada).toasts.join(" "), /come back on the beacon/);
+  });
+
+  it("tells an ocean diver when the pack is used", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const found = ocean.locate(ada);
+    assert.ok(found);
+    stow(found.diver.pack, "o2", 1);
+    found.diver.o2 = 20;
+    const index = found.diver.pack.findIndex((slot) => slot?.kind === "o2");
+    ocean.setIntent(ada, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, pack: index });
+    assert.match(ocean.snapshot(ada).toasts.join(" "), /oxygen from the pack/);
+    assert.ok(found.diver.o2 > 20);
+  });
+
+  it("keeps a pinned beacon when a diver is moved", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const found = ocean.locate(ada);
+    assert.ok(found);
+    found.diver.pinned = true;
+    found.diver.beaconRegion = "breach";
+    found.diver.beaconX = 12;
+    found.diver.beaconY = 18;
+    ocean.place(ada, "works", 10 * TILE, 8 * TILE);
+    assert.equal(found.diver.region, "works");
+    assert.equal(found.diver.pinned, true);
+    assert.equal(found.diver.beaconRegion, "breach");
+    assert.equal(found.diver.beaconX, 12);
+    assert.equal(found.diver.beaconY, 18);
   });
 
   it("keeps two sectors alive while a third stays asleep", () => {
