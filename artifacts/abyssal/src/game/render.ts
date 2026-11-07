@@ -82,6 +82,159 @@ function screen(camX: number, camY: number, x: number, y: number) {
   return { x: x - camX, y: y - camY };
 }
 
+/** A drowned refuge: locker, pump, and a beacon mast. Not a map pin. */
+function drawSaveStation(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+  powered: boolean,
+  pinned: boolean,
+) {
+  const px = Math.round(x);
+  const py = Math.round(y);
+  ctx.fillStyle = "rgba(4, 10, 12, 0.72)";
+  ctx.fillRect(px - 18, py + 10, 38, 4);
+  ctx.fillStyle = "#1b1612";
+  ctx.fillRect(px - 14, py + 8, 9, 3);
+  ctx.fillRect(px + 6, py + 9, 8, 2);
+
+  ctx.fillStyle = "#2a322e";
+  ctx.fillRect(px - 17, py + 4, 36, 6);
+  ctx.fillStyle = "#59645c";
+  ctx.fillRect(px - 17, py + 4, 36, 1);
+  ctx.fillStyle = "#101614";
+  ctx.fillRect(px - 15, py + 8, 32, 1);
+
+  ctx.fillStyle = "#2a3840";
+  ctx.fillRect(px - 16, py - 14, 18, 20);
+  ctx.fillStyle = "#3c515a";
+  ctx.fillRect(px - 16, py - 14, 18, 2);
+  ctx.fillStyle = "#0c1418";
+  ctx.fillRect(px - 8, py - 14, 1, 20);
+  ctx.fillStyle = "#c6a15a";
+  ctx.fillRect(px - 12, py - 5, 2, 6);
+  ctx.fillStyle = "#9aa59c";
+  ctx.fillRect(px - 15, py - 12, 1, 1);
+  ctx.fillRect(px - 0, py - 12, 1, 1);
+  ctx.fillRect(px - 15, py + 4, 1, 1);
+  ctx.fillRect(px, py + 4, 1, 1);
+
+  ctx.fillStyle = "#17262c";
+  ctx.fillRect(px + 3, py - 10, 15, 16);
+  ctx.fillStyle = "#41545a";
+  ctx.fillRect(px + 3, py - 10, 15, 2);
+  ctx.fillStyle = "#070e12";
+  ctx.fillRect(px + 7, py - 5, 7, 7);
+  ctx.fillStyle = powered ? "#3ee0c5" : "#6a4030";
+  ctx.fillRect(px + 8, py - 4, powered ? 5 : 2, 5);
+  ctx.strokeStyle = "#d7c4a3";
+  ctx.strokeRect(px + 6, py - 16, 9, 5);
+  ctx.fillStyle = "#8a7344";
+  ctx.fillRect(px + 9, py - 11, 2, 2);
+
+  ctx.fillStyle = powered ? "#1d4c48" : "#2a2420";
+  ctx.fillRect(px - 22, py + 2, 6, 3);
+  ctx.fillRect(px + 18, py + 1, 7, 3);
+  if (powered) {
+    ctx.fillStyle = "rgba(62, 224, 197, 0.75)";
+    ctx.fillRect(px - 21, py + 3, 4, 1);
+    ctx.fillRect(px + 19, py + 2, 5, 1);
+  }
+
+  ctx.fillStyle = "#3a4648";
+  ctx.fillRect(px - 2, py - 28, 2, 14);
+  const blink = 0.55 + Math.sin(time * (pinned ? 4 : 1.6)) * 0.35;
+  ctx.save();
+  ctx.globalAlpha = pinned || powered ? blink : 0.5;
+  ctx.fillStyle = pinned ? "#f2d180" : powered ? "#7ef0d8" : "#c46a32";
+  ctx.fillRect(px - 4, py - 32, 6, 4);
+  ctx.restore();
+  if (pinned || powered) {
+    ctx.fillStyle = pinned ? "rgba(242, 209, 128, 0.2)" : "rgba(62, 224, 197, 0.16)";
+    ctx.fillRect(px - 12, py - 38, 22, 12);
+  }
+}
+
+function drawInfoDesk(ctx: CanvasRenderingContext2D, x: number, y: number, awake: boolean) {
+  const px = Math.round(x);
+  const py = Math.round(y);
+  ctx.fillStyle = "rgba(4, 10, 12, 0.65)";
+  ctx.fillRect(px - 16, py + 10, 32, 3);
+  ctx.fillStyle = "#3a342c";
+  ctx.fillRect(px - 14, py - 2, 28, 5);
+  ctx.fillStyle = "#6d6254";
+  ctx.fillRect(px - 14, py - 2, 28, 1);
+  ctx.fillStyle = "#241e18";
+  ctx.fillRect(px - 12, py + 3, 3, 8);
+  ctx.fillRect(px + 9, py + 3, 3, 8);
+  ctx.fillStyle = awake ? "#d7c4a3" : "#3a342c";
+  ctx.fillRect(px - 6, py - 8, 10, 6);
+  ctx.fillStyle = awake ? "#8cf1d4" : "#1a1612";
+  ctx.fillRect(px - 5, py - 7, 8, 4);
+  ctx.fillStyle = "#2a3840";
+  ctx.fillRect(px + 6, py - 12, 4, 10);
+  ctx.fillStyle = awake ? "#f2d180" : "#5a4030";
+  ctx.fillRect(px + 6, py - 14, 4, 3);
+}
+
+function drawRepair(ctx: CanvasRenderingContext2D, x: number, y: number, powered: boolean) {
+  const px = Math.round(x);
+  const py = Math.round(y);
+  ctx.fillStyle = "rgba(4, 10, 12, 0.65)";
+  ctx.fillRect(px - 14, py + 10, 28, 3);
+  ctx.fillStyle = "#1c2a30";
+  ctx.fillRect(px - 12, py - 8, 24, 18);
+  ctx.fillStyle = "#3d5158";
+  ctx.fillRect(px - 12, py - 8, 24, 2);
+  ctx.fillStyle = "#070e12";
+  ctx.fillRect(px - 4, py - 4, 8, 10);
+  ctx.fillStyle = powered ? "#f2d180" : "#4a4034";
+  ctx.fillRect(px - 2, py - 2, 4, 6);
+  ctx.fillStyle = powered ? "#3ee0c5" : "#6a4030";
+  ctx.fillRect(px - 1, py - 1, 2, 4);
+  ctx.fillStyle = powered ? "#1d4c48" : "#2a2420";
+  ctx.fillRect(px - 18, py + 2, 6, 3);
+  ctx.fillRect(px + 12, py + 2, 6, 3);
+  if (powered) {
+    ctx.fillStyle = "rgba(62, 224, 197, 0.8)";
+    ctx.fillRect(px - 17, py + 3, 4, 1);
+    ctx.fillRect(px + 13, py + 3, 4, 1);
+  }
+}
+
+function drawBench(ctx: CanvasRenderingContext2D, x: number, y: number, spent: boolean) {
+  const px = Math.round(x);
+  const py = Math.round(y);
+  ctx.fillStyle = "rgba(4, 10, 12, 0.65)";
+  ctx.fillRect(px - 16, py + 10, 32, 3);
+  ctx.fillStyle = "#3a3228";
+  ctx.fillRect(px - 14, py, 28, 6);
+  ctx.fillStyle = "#6a5844";
+  ctx.fillRect(px - 14, py, 28, 1);
+  ctx.fillStyle = "#241c16";
+  ctx.fillRect(px - 12, py + 6, 3, 5);
+  ctx.fillRect(px + 9, py + 6, 3, 5);
+  ctx.fillStyle = spent ? "#3a342c" : "#c4553a";
+  ctx.fillRect(px - 8, py - 8, 16, 3);
+  ctx.fillStyle = "#d7c4a3";
+  ctx.fillRect(px - 2, py - 10, 2, 8);
+  ctx.fillStyle = spent ? "#5a4030" : "#e7a04a";
+  ctx.fillRect(px + 8, py - 6, 3, 3);
+}
+
+function drawCell(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  const px = Math.round(x);
+  const py = Math.round(y);
+  ctx.fillStyle = "#1a140c";
+  ctx.fillRect(px - 7, py - 8, 14, 16);
+  ctx.fillStyle = "#c6a15a";
+  ctx.fillRect(px - 6, py - 6, 12, 12);
+  ctx.fillStyle = "#f2d180";
+  ctx.fillRect(px - 2, py - 10, 4, 3);
+  ctx.fillRect(px - 3, py - 2, 6, 4);
+}
+
 export function drawSea(
   ctx: CanvasRenderingContext2D,
   sim: Sim,
@@ -156,8 +309,11 @@ export function drawSea(
           ctx.fillRect(x + 6, y + 8, 2, 2);
         }
       } else if (t === 2 && Math.sin(sim.time * 18 + tx) > 0.2) {
-        ctx.strokeStyle = "rgba(231, 160, 74, 0.85)";
-        ctx.strokeRect(x + 4, y + 4, TILE - 8, TILE - 8);
+        ctx.fillStyle = "rgba(231, 160, 74, 0.95)";
+        const j = (tx + Math.floor(sim.time * 14)) & 3;
+        ctx.fillRect(x + 3, y + 4 + j, 2, 2);
+        ctx.fillRect(x + 7, y + 8 - j, 2, 2);
+        ctx.fillRect(x + 11, y + 6, 2, 3);
       } else if (t === 3) {
         ctx.strokeStyle = "rgba(62, 224, 197, 0.45)";
         ctx.beginPath();
@@ -199,13 +355,31 @@ export function drawSea(
     if (marker.kind === "lore") blit(ctx, art.props, 2, 2, 3, p.x, p.y, 36, 36, false);
     else {
       const kind = marker.kind;
-      ctx.strokeStyle = kind === "upgrade" ? "#e7a04a" : kind === "save" ? "#f2d180" : kind === "info" ? "#d7c4a3" : "#3ee0c5";
-      ctx.strokeRect(p.x - 10, p.y - 10, 20, 20);
+      const pinnedHere = !!observer?.pinned && observer.beaconRegion === marker.region && Math.hypot(observer.beaconX - marker.x, observer.beaconY - marker.y) < 8;
+      const refugeLive = regionId === "breach" || memory.powered;
+      let lift = 29;
+      if (kind === "save") {
+        drawSaveStation(ctx, p.x, p.y, sim.time, refugeLive, pinnedHere);
+        lift = 46;
+      } else if (kind === "info") {
+        drawInfoDesk(ctx, p.x, p.y, refugeLive);
+        lift = 38;
+      } else if (kind === "repair") {
+        drawRepair(ctx, p.x, p.y, memory.powered);
+        lift = 34;
+      } else if (kind === "upgrade") {
+        drawBench(ctx, p.x, p.y, sim.flags.upgraded);
+        lift = 34;
+      } else {
+        ctx.strokeStyle = "#3ee0c5";
+        ctx.strokeRect(p.x - 10, p.y - 10, 20, 20);
+      }
       const near = !!observer?.alive && !observer.vehicleId && Math.hypot(observer.x - marker.x, observer.y - marker.y) <= 70;
       const label =
         kind === "repair" && near ? (memory.powered ? "GRID ONLINE" : "E / USE: GRID · 1 CELL") :
         kind === "save" && near ? (regionId !== "breach" && !memory.powered ? "E PIN · GRID OR SALVAGE" : "E / USE: SAVE · G LOCKER") :
         kind === "info" && near ? (regionId !== "breach" && !memory.powered ? "DESK DARK · RESTORE GRID" : "E / USE: FILE") :
+        kind === "upgrade" && near ? (sim.flags.upgraded ? "SPRING TAKEN" : "E / USE: RELINE · 1 CELL") :
         "";
       if (label) {
         ctx.save();
@@ -213,9 +387,9 @@ export function drawSea(
         ctx.textAlign = "center";
         const width = ctx.measureText(label).width + 10;
         ctx.fillStyle = "rgba(2, 12, 18, 0.9)";
-        ctx.fillRect(p.x - width / 2, p.y - 29, width, 13);
+        ctx.fillRect(p.x - width / 2, p.y - lift, width, 13);
         ctx.fillStyle = kind === "save" ? "#f2d180" : "#8cf1d4";
-        ctx.fillText(label, p.x, p.y - 20);
+        ctx.fillText(label, p.x, p.y - lift + 9);
         ctx.restore();
       }
     }
@@ -226,7 +400,8 @@ export function drawSea(
     const p = screen(camX, camY, pickup.x, pickup.y);
     const frame = pickup.kind === "o2" ? 0 : pickup.kind === "med" ? 1 : pickup.kind === "ammo" ? 2 : 0;
     const bob = Math.sin(sim.time * 2 + pickup.x) * 2;
-    blit(ctx, art.props, 2, 2, frame, p.x, p.y + bob, 28, 28, false);
+    if (pickup.kind === "cell") drawCell(ctx, p.x, p.y + bob);
+    else blit(ctx, art.props, 2, 2, frame, p.x, p.y + bob, 28, 28, false);
     if (pickup.reward) {
       ctx.save();
       const tint = pickup.kind === "med" ? "#f2b4a0" : pickup.kind === "cell" ? "#f2d180" : "#8cf1d4";
@@ -276,8 +451,15 @@ export function drawSea(
 
   for (const bubble of bubbles) {
     const p = screen(camX, camY, bubble.x, bubble.y);
-    ctx.strokeStyle = `rgba(230, 241, 238, ${Math.max(0, bubble.life)})`;
-    ctx.strokeRect(p.x, p.y, bubble.r, bubble.r);
+    const a = Math.max(0, bubble.life);
+    const r = Math.max(2, bubble.r);
+    ctx.fillStyle = `rgba(230, 241, 238, ${a})`;
+    ctx.fillRect(p.x, p.y, r, 1);
+    ctx.fillRect(p.x, p.y + r - 1, r, 1);
+    ctx.fillRect(p.x, p.y, 1, r);
+    ctx.fillRect(p.x + r - 1, p.y, 1, r);
+    ctx.fillStyle = `rgba(255, 255, 255, ${a})`;
+    ctx.fillRect(p.x + 1, p.y + 1, 1, 1);
   }
 
   const you = sim.divers.find((d) => d.id === focusId);
@@ -321,7 +503,9 @@ export function drawSea(
     if (bloom.state !== "warn" && bloom.state !== "pulse") continue;
     const p = screen(camX, camY, bloom.x, bloom.y);
     ctx.strokeStyle = bloom.state === "pulse" ? "rgba(231, 160, 74, 0.9)" : "rgba(62, 224, 197, 0.55)";
-    ctx.strokeRect(p.x - 28, p.y - 22, 56, 44);
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, 28, 18, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   ctx.fillStyle = "rgba(2, 8, 12, 0.45)";
@@ -364,7 +548,9 @@ function drawVehicle(
   ctx.restore();
   if (vehicle.shield > 0) {
     ctx.strokeStyle = "rgba(62, 224, 197, 0.9)";
-    ctx.strokeRect(p.x - 78, p.y - 28, 156, 56);
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, vehicle.kind === "scooter" ? 28 : 78, vehicle.kind === "scooter" ? 14 : 28, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
   if (stage >= 1 && !vehicle.destroyed && Math.sin(time * 20) > 0) {
     ctx.fillStyle = "#e7a04a";

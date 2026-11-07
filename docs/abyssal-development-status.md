@@ -79,6 +79,7 @@ Update this status document as gameplay capabilities change.
 - No signed-in browser-client return test or two-browser session was run; production checks used the persistent-ocean HTTP API.
 - No PostgreSQL service restart, database disaster-recovery test, multiplayer load test, or multiplayer capacity certification has run. The web-service restart did not certify healthy health/oxygen continuity.
 - The breach refuge, the plains pair, and the city pair are in. The city desk stays dark until that district grid is restored, and a filed slide from it does not open the collar. Works and reef still have no save station or desk. Blackout spills one supply stack; it is not a full expedition wipe.
+- Save stations, information desks, repair junctions, and the harpoon bench are drawn as hardware. Energy cells no longer look like air canisters. The surface stays sealed.
 - No new species or surface/trench campaign destinations have been added. The plains stations are in a region that already existed.
 
 ## What this does not claim
