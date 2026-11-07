@@ -116,6 +116,25 @@ describe("regional ocean", () => {
     assert.ok(ocean.snapshot(ada).seen.includes("plains-signal"));
   });
 
+  it("keeps the city locker on the city sector through a save", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const save = ocean.sectors.city.markers.find((marker) => marker.id === "save-city");
+    assert.ok(save);
+    ocean.place(ada, "city", save.x, save.y);
+    const found = ocean.locate(ada);
+    assert.ok(found);
+    stow(found.diver.pack, "scrap", 1);
+    const packIndex = found.diver.pack.findIndex((slot) => slot?.kind === "scrap");
+    ocean.setIntent(ada, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, stowIndex: packIndex });
+    const kept = ocean.toBody();
+    assert.equal(kept.lockers?.["save-city"]?.some((slot) => slot?.kind === "scrap"), true);
+    const revived = Ocean.revive(kept);
+    assert.equal(revived.sectors.city.lockers["save-city"].some((slot) => slot?.kind === "scrap"), true);
+    assert.equal(revived.sectors.breach.lockers["save-city"], undefined);
+    assert.equal(revived.sectors.reef.lockers["save-city"], undefined);
+  });
+
   it("tells the diver what a kill left in the water", () => {
     const ocean = new Ocean();
     const ada = ocean.join(null, "Ada");

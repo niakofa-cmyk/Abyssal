@@ -387,6 +387,8 @@ export function buildLayout() {
     { id: "m10", region: "city", x: 18 * TILE, y: 6 * TILE, kind: "lore", logId: "city-barrow" },
     { id: "m11", region: "city", x: 70 * TILE, y: 11 * TILE, kind: "lore", logId: "city-tram" },
     { id: "m12", region: "city", x: 16 * TILE, y: 12 * TILE, kind: "repair" },
+    { id: "save-city", region: "city", x: 14 * TILE, y: 8 * TILE, kind: "save" },
+    { id: "info-city", region: "city", x: 22 * TILE, y: 8 * TILE, kind: "info", logId: "city-desk" },
     { id: "m13", region: "works", x: 36 * TILE, y: 9 * TILE, kind: "lore", logId: "works-vent" },
     { id: "m14", region: "works", x: 80 * TILE, y: 6 * TILE, kind: "repair" },
     { id: "m15", region: "reef", x: 34 * TILE, y: 5 * TILE, kind: "lore", logId: "reef-spore" },

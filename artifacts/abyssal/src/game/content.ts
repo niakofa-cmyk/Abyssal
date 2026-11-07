@@ -41,6 +41,18 @@ export const LOGS: Record<string, LogEntry> = {
     title: "Filed slide — plains silt",
     body: "A glass slide from the plains desk. Dark water, a warm conduit, and no name. The expedition can reopen this record. The collar stays shut.",
   },
+  "city-desk": {
+    title: "City desk — past the Maw's door",
+    body: "The drowned city keeps a desk of its own. It stays dark until this district grid is restored. A filed slide from here does not open the collar, and it does not open the surface.",
+  },
+  "city-signal": {
+    title: "City grid — the desk answers",
+    body: "Power on the city repair wakes the information desk. The signal is only the desk coming on. The Maw's door was the way in. This is not the upper lock.",
+  },
+  "sample:city": {
+    title: "Filed slide — city glass",
+    body: "A glass slide from the city desk. Tower silt, a thread of lamp growth, and no name. The expedition can reopen this record. The surface stays shut.",
+  },
   "breach-loft": {
     title: "A name in the loft glass",
     body: "Someone wrote a name in the condensation, and a date that is only a month. Under it: oranges on Friday if the tram runs. The glass is cracked. The name is not.",

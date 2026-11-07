@@ -195,7 +195,11 @@ export function createSim(opts: SpawnOpts): Sim {
     projectiles: [],
     pickups: layout.pickups,
     markers: layout.markers,
-    lockers: { "save-breach": emptyPack(LOCKER_SLOTS), "save-plains": emptyPack(LOCKER_SLOTS) },
+    lockers: {
+      "save-breach": emptyPack(LOCKER_SLOTS),
+      "save-plains": emptyPack(LOCKER_SLOTS),
+      "save-city": emptyPack(LOCKER_SLOTS),
+    },
     taken: [],
     discovered: [],
     shared: [],

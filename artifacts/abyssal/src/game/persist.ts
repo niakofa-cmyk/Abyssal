@@ -222,5 +222,8 @@ export function applySave(sim: Sim, selfId: string, file: SaveFile) {
     sim.lockers = {};
     for (const [id, slots] of Object.entries(file.lockers)) sim.lockers[id] = revivePack(slots, LOCKER_SLOTS);
   }
+  for (const marker of sim.markers) {
+    if (marker.kind === "save" && !sim.lockers[marker.id]) sim.lockers[marker.id] = emptyPack(LOCKER_SLOTS);
+  }
   you.alive = you.hp > 0;
 }

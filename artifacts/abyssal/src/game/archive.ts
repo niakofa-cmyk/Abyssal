@@ -74,6 +74,21 @@ export const STATIONS: Record<string, { kind: StationKind; place: string; missin
     place: "Plains desk",
     missing: "a filed glass slide from the plains",
   },
+  "city-desk": {
+    kind: "engineering",
+    place: "City desk",
+    missing: "the city station card",
+  },
+  "city-signal": {
+    kind: "engineering",
+    place: "City grid",
+    missing: "the desk the city grid wakes",
+  },
+  "sample:city": {
+    kind: "research",
+    place: "City desk",
+    missing: "a filed glass slide from the city",
+  },
   "plains-city": {
     kind: "history",
     place: "Plains",

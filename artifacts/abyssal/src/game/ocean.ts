@@ -650,7 +650,9 @@ export class Ocean {
     if (body.lockers) {
       for (const [id, slots] of Object.entries(body.lockers)) {
         const pack = revivePack(slots, id.startsWith("save-") ? LOCKER_SLOTS : 20);
-        const region = ocean.sectors.breach.markers.find((marker) => marker.id === id)?.region ?? "breach";
+        const region = REGIONS.find((rid) =>
+          ocean.sectors[rid].markers.some((marker) => marker.id === id && marker.kind === "save"),
+        ) ?? "breach";
         ocean.sectors[region].lockers[id] = pack;
       }
     }

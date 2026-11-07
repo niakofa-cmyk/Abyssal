@@ -60,10 +60,11 @@ Held on purpose: no Arctic, no playable surface, no 2.5D renderer.
 ## 5. Station network
 
 - [x] One save station and one desk in the plains, after the breach pair.
+- [x] One save station and one desk in the city, after the Maw's door. Its locker is its own.
 - [x] The plains locker is its own locker.
 - [x] A new pin replaces the old one only when the diver uses that station.
 - [x] Blackout returns to the last pin.
-- [ ] City, works, and reef still have no save station or desk.
+- [ ] Works and reef still have no save station or desk.
 
 ## 6. Mobile companion
 
