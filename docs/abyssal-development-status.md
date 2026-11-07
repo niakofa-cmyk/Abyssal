@@ -72,6 +72,7 @@ Update this status document as gameplay capabilities change.
 - The mobile console can draw, stow, and withdraw the same ocean intent. It shows pack occupancy and whether the beacon is pinned.
 - Two divers sharing the breach locker is covered by an automated ocean test, including a save and revive. A station locker is stored only on the sector that owns it. That is not a two-browser session and not a Railway restart.
 - A blackout in the shared ocean tells that diver which pack stack was spilled. The dead screen shows the same line. Pack use, a recovered spill, a hull brace, and the beacon return use the same path. A pinned beacon stays put when that diver is moved.
+- A glass slide keeps the desk that issued it, including through a locker. Restoring a dark district says the desk is awake. A kill tells that diver what was left in the water. A record read by one diver is shared with the expedition, and is not written into another diver's own journal.
 
 ## Still unverified or not implemented
 

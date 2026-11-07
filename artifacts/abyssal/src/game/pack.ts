@@ -48,19 +48,21 @@ export function revivePack(value: unknown, slots = PACK_SLOTS): Array<PackSlot |
 }
 
 /** Returns what would not fit. Mutates the pack. */
-export function stow(pack: Array<PackSlot | null>, kind: PackKind, amount: number) {
+export function stow(pack: Array<PackSlot | null>, kind: PackKind, amount: number, from?: string) {
   let left = Math.max(0, Math.floor(amount));
+  const origin = kind === "sample" && from && REGIONS.has(from) ? from : undefined;
   for (const slot of pack) {
     if (!slot || slot.kind !== kind || slot.amount >= LIMIT[kind]) continue;
     const take = Math.min(LIMIT[kind] - slot.amount, left);
     slot.amount += take;
+    if (origin && !slot.from) slot.from = origin;
     left -= take;
     if (left <= 0) return 0;
   }
   for (let i = 0; i < pack.length && left > 0; i += 1) {
     if (pack[i]) continue;
     const take = Math.min(LIMIT[kind], left);
-    pack[i] = { kind, amount: take };
+    pack[i] = { kind, amount: take, ...(origin ? { from: origin } : {}) };
     left -= take;
   }
   return left;

@@ -471,6 +471,25 @@ describe("abyssal sim", () => {
     assert.equal(you.pack.find((slot) => slot?.kind === "sample")?.from, "plains");
   });
 
+  it("keeps a slide's desk when the locker holds it", () => {
+    const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
+    const you = findDiver(sim, "a");
+    const desk = sim.markers.find((marker) => marker.id === "info-breach");
+    const save = sim.markers.find((marker) => marker.id === "save-breach");
+    assert.ok(you && desk && save);
+    you.x = desk.x;
+    you.y = desk.y;
+    pressUse(sim, you);
+    const packed = you.pack.findIndex((slot) => slot?.kind === "sample");
+    you.x = save.x;
+    you.y = save.y;
+    pressStow(sim, you, packed);
+    assert.equal(sim.lockers["save-breach"].find((slot) => slot?.kind === "sample")?.from, "breach");
+    const stored = sim.lockers["save-breach"].findIndex((slot) => slot?.kind === "sample");
+    pressWithdraw(sim, you, stored);
+    assert.equal(you.pack.find((slot) => slot?.kind === "sample")?.from, "breach");
+  });
+
   it("does not burn salvage when the pumps are already full", () => {
     const sim = createSim({ selfId: "a", name: "A", partner: false, soren: false });
     const you = findDiver(sim, "a");

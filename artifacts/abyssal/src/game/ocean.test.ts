@@ -99,6 +99,45 @@ describe("regional ocean", () => {
     assert.equal(found.diver.beaconY, 18);
   });
 
+  it("says when the plains grid wakes the desk", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const repair = ocean.sectors.plains.markers.find((marker) => marker.id === "m9");
+    assert.ok(repair);
+    ocean.place(ada, "plains", repair.x, repair.y);
+    const found = ocean.locate(ada);
+    assert.ok(found);
+    found.diver.cells = 1;
+    ocean.setIntent(ada, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: false, use: true });
+    assert.equal(ocean.sectors.plains.ecology.plains.powered, true);
+    const text = ocean.snapshot(ada).toasts.join(" ");
+    assert.match(text, /district grid/);
+    assert.match(text, /wakes the desk/);
+    assert.ok(ocean.snapshot(ada).seen.includes("plains-signal"));
+  });
+
+  it("tells the diver what a kill left in the water", () => {
+    const ocean = new Ocean();
+    const ada = ocean.join(null, "Ada");
+    const found = ocean.locate(ada);
+    assert.ok(found);
+    const prey = found.sim.creatures.find((creature) => creature.alive && creature.kind !== "maw");
+    assert.ok(prey);
+    found.diver.x = 20 * TILE;
+    found.diver.y = 9 * TILE;
+    found.diver.ammo = 12;
+    found.diver.fireCd = 0;
+    prey.region = "breach";
+    prey.x = found.diver.x + 28;
+    prey.y = found.diver.y;
+    prey.hp = 1;
+    ocean.setIntent(ada, { ax: 0, ay: 0, aimX: 1, aimY: 0, fire: true });
+    for (let i = 0; i < 8; i += 1) ocean.step(1 / 20);
+    assert.equal(prey.alive, false);
+    assert.match(ocean.snapshot(ada).toasts.join(" "), /down/);
+    assert.match(ocean.snapshot(ada).toasts.join(" "), /adrift/);
+  });
+
   it("keeps two sectors alive while a third stays asleep", () => {
     const ocean = new Ocean();
     const ada = ocean.join(null, "Ada");

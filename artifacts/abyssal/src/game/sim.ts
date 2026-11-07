@@ -19,7 +19,7 @@ import { isSolid, tileAt, buildLayout } from "./world.ts";
 import { casesClosedBy } from "./archive.ts";
 import { advanceEcology, createEcology, emitNoise, restorePower, ECOLOGY_EVENTS } from "./ecology.ts";
 import { CREATURE_RESPAWN_RULES, MAX_REWARD_DROPS, rewardForDefeat, reviveRewardDrops } from "./rewards.ts";
-import { LOCKER_SLOTS, SUPPLY_YIELD, drawOne, emptyPack, isPackKind, occupied, packLabel, stow, supplyIndex } from "./pack.ts";
+import { LOCKER_SLOTS, SUPPLY_YIELD, drawOne, emptyPack, isPackKind, occupied, packLabel, stow, supplyIndex, type PackSlot } from "./pack.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -70,6 +70,21 @@ function hears(diver: Diver) {
 function say(sim: Sim, diver: Diver, text: string) {
   if (diver.kind === "you") note(sim, text);
   else if (diver.tint === "remote") sim.events.push(`said:${diver.id}:${text}`);
+}
+
+function tell(sim: Sim, region: RegionId, text: string) {
+  let heard = false;
+  for (const diver of sim.divers) {
+    if (!diver.alive || diver.region !== region || !hears(diver)) continue;
+    say(sim, diver, text);
+    heard = true;
+  }
+  if (!heard) note(sim, text);
+}
+
+function kept(slot: PackSlot, left: number): PackSlot | null {
+  if (left <= 0) return null;
+  return { kind: slot.kind, amount: left, ...(slot.from ? { from: slot.from } : {}) };
 }
 
 export function discover(sim: Sim, id: string) {
@@ -1000,12 +1015,12 @@ export function pressStow(sim: Sim, diver: Diver, packIndex?: number) {
   }
   if (index >= 0 && diver.pack[index]) {
     const slot = diver.pack[index]!;
-    const left = stow(locker, slot.kind, slot.amount);
+    const left = stow(locker, slot.kind, slot.amount, slot.from);
     if (left === slot.amount) {
       note(sim, "The station locker is full.");
       return;
     }
-    diver.pack[index] = left > 0 ? { kind: slot.kind, amount: left } : null;
+    diver.pack[index] = kept(slot, left);
     note(sim, `${packLabel(slot.kind)} ×${slot.amount - left} left in the ${station.region} locker.`);
     sim.events.push("stow");
     return;
@@ -1014,12 +1029,12 @@ export function pressStow(sim: Sim, diver: Diver, packIndex?: number) {
   for (let i = locker.length - 1; i >= 0; i -= 1) {
     const slot = locker[i];
     if (!slot) continue;
-    const left = stow(diver.pack, slot.kind, slot.amount);
+    const left = stow(diver.pack, slot.kind, slot.amount, slot.from);
     if (left === slot.amount) {
       note(sim, "The pack has no room for the locker.");
       return;
     }
-    locker[i] = left > 0 ? { kind: slot.kind, amount: left } : null;
+    locker[i] = kept(slot, left);
     note(sim, `${packLabel(slot.kind)} ×${slot.amount - left} back in the pack.`);
     sim.events.push("stow");
     return;
@@ -1040,12 +1055,12 @@ export function pressWithdraw(sim: Sim, diver: Diver, lockerIndex: number) {
     note(sim, "That locker slot is empty.");
     return;
   }
-  const left = stow(diver.pack, slot.kind, slot.amount);
+  const left = stow(diver.pack, slot.kind, slot.amount, slot.from);
   if (left === slot.amount) {
     note(sim, "The pack has no room for the locker.");
     return;
   }
-  locker[lockerIndex] = left > 0 ? { kind: slot.kind, amount: left } : null;
+  locker[lockerIndex] = kept(slot, left);
   note(sim, `${packLabel(slot.kind)} ×${slot.amount - left} back in the pack.`);
   sim.events.push("stow");
 }
@@ -1362,13 +1377,13 @@ function killCreature(sim: Sim, c: Creature) {
     });
     sim.events.push("reward");
     const label = reward.kind === "o2" ? "oxygen" : reward.kind === "med" ? "medical" : reward.kind === "ammo" ? "ammunition" : "energy";
-    note(sim, `${c.kind === "hunter" ? "Hunter" : c.kind === "sentry" ? "Sentry" : c.kind} down. ${reward.amount} ${label} adrift.`);
+    tell(sim, c.region, `${c.kind === "hunter" ? "Hunter" : c.kind === "sentry" ? "Sentry" : c.kind} down. ${reward.amount} ${label} adrift.`);
     return;
   }
   sim.flags.mawDead = true;
   sim.bossBanner = 3.4;
   discover(sim, "plains-maw");
-  note(sim, "The Maw folds. The collar behind it answers.");
+  tell(sim, c.region, "The Maw folds. The collar behind it answers.");
   for (const d of sim.divers) {
     if (!d.alive || d.region !== c.region || d.kind === "remote") continue;
     d.ammo = clamp(d.ammo + 6, 0, 28);

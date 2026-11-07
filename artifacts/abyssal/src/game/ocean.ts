@@ -415,13 +415,23 @@ export class Ocean {
           if (cut > 0) this.toast(body.slice(0, cut), body.slice(cut + 1));
           continue;
         }
+        if (event.startsWith("log:")) {
+          const id = event.slice(4);
+          if (!this.found.includes(id)) {
+            const before = this.found.slice();
+            this.found.push(id);
+            for (const line of casesClosedBy(before, id)) {
+              for (const other of this.players.values()) this.toast(other.token, line);
+            }
+          }
+          continue;
+        }
         for (const diver of sim.divers) {
           const player = this.players.get(diver.id);
           if (!player || player.adrift) continue;
           player.pending.push(event);
           if (player.pending.length > 24) player.pending.splice(0, player.pending.length - 24);
-          if (event === "reward") this.toast(diver.id, "A shared supply is adrift where the creature fell.");
-          else if (event.startsWith("returned:")) {
+          if (event.startsWith("returned:")) {
             this.toast(diver.id, `The ${event.slice("returned:".length)} has returned to its territory.`);
           } else if (event === `air-low:${diver.id}`) {
             this.toast(diver.id, "Oxygen low. Find a refill or return to a working vehicle.");
@@ -932,10 +942,13 @@ export class Ocean {
     const toastId = sim.toastId;
     pressUse(sim, diver);
     this.keepRecords(diver.id, sim);
-    if (!wasPowered && sim.ecology[diver.region].powered) {
+    const poweredNow = !wasPowered && sim.ecology[diver.region].powered;
+    if (poweredNow) {
       for (const observer of sim.divers) this.toast(observer.id, ECOLOGY_EVENTS.power);
-    } else {
-      for (const crumb of sim.toasts.filter((t) => t.id > toastId)) this.toast(diver.id, crumb.text);
+    }
+    for (const crumb of sim.toasts.filter((t) => t.id > toastId)) {
+      if (poweredNow && crumb.text === ECOLOGY_EVENTS.power) continue;
+      this.toast(diver.id, crumb.text);
     }
     if (had && !diver.vehicleId) this.toast(diver.id, "You slip off the hull.");
     else if (diver.vehicleId && diver.seat !== seat) {
