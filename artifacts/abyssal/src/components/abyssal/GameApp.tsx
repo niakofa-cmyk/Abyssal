@@ -19,6 +19,7 @@ import {
   type Profile,
 } from "@/game/persist";
 import { drawSea, loadArt, type Art, type Bubble } from "@/game/render";
+import { sampleFlow } from "@/game/flow";
 import {
   applyGrant,
   applyOwn,
@@ -38,6 +39,7 @@ import {
   pressWithdraw,
   nearestStation,
   stepSim,
+  hullStage,
   velocityOf,
   hullStage,
 } from "@/game/sim";
@@ -698,6 +700,16 @@ export function GameApp() {
             vy: -18,
           });
         }
+        const ride = youNow?.vehicleId ? session.sim.vehicles.find((vehicle) => vehicle.id === youNow.vehicleId) : undefined;
+        if (ride && hullStage(ride) >= 2 && Math.random() < 0.55) {
+          session.bubbles.push({
+            x: ride.x + (Math.random() - 0.5) * 20,
+            y: ride.y - 6,
+            r: 2 + Math.random() * 2,
+            life: 1.2,
+            vy: -28,
+          });
+        }
       } else if (!paused) {
         simAcc += frameDt;
         const heard: string[] = [];
@@ -725,6 +737,16 @@ export function GameApp() {
             r: 2 + Math.random() * 2,
             life: 1,
             vy: -18,
+          });
+        }
+        const ride = youNow?.vehicleId ? session.sim.vehicles.find((vehicle) => vehicle.id === youNow.vehicleId) : undefined;
+        if (ride && hullStage(ride) >= 2 && Math.random() < 0.55) {
+          session.bubbles.push({
+            x: ride.x + (Math.random() - 0.5) * 20,
+            y: ride.y - 6,
+            r: 2 + Math.random() * 2,
+            life: 1.2,
+            vy: -28,
           });
         }
       }
@@ -763,7 +785,10 @@ export function GameApp() {
         writeSave(session.sim, session.selfId);
       }
       for (const bubble of session.bubbles) {
-        bubble.y += bubble.vy * frameDt;
+        const region = findDiver(session.sim, session.selfId)?.region ?? "breach";
+        const flow = sampleFlow(session.sim, region, bubble.x, bubble.y);
+        bubble.x += flow.x * frameDt;
+        bubble.y += (bubble.vy + flow.y * 0.45) * frameDt;
         bubble.life -= frameDt;
       }
       session.bubbles = session.bubbles.filter((b) => b.life > 0).slice(-80);

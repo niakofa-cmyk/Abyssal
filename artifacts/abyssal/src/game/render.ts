@@ -1,6 +1,7 @@
 import type { Creature, Diver, RegionId, Sim, Vehicle } from "./types";
 import { TILE, VIEW_H, VIEW_W } from "./types";
 import { hullStage } from "./sim";
+import { sampleFlow } from "./flow";
 
 export type Art = {
   diver: HTMLImageElement;
@@ -267,6 +268,17 @@ export function drawSea(
     ctx.drawImage(bg, shift + w, 0, w, VIEW_H);
     ctx.fillStyle = "rgba(2, 8, 12, 0.38)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.save();
+    ctx.globalAlpha = regionId === "reef" ? 0.16 : regionId === "breach" ? 0.05 : 0.09;
+    ctx.fillStyle = "#c6fff4";
+    const drift = sim.time * 14;
+    for (let i = 0; i < 16; i++) {
+      const x = ((i * 73 + drift) % (VIEW_W + 24)) - 12;
+      const y = (i * 41 + drift * 0.35) % (VIEW_H + 8);
+      ctx.fillRect(x, y, 11, 1);
+      ctx.fillRect(x + 7, y + 3, 6, 1);
+    }
+    ctx.restore();
   }
   if (regionId === "reef") {
     ctx.fillStyle = "rgba(186, 214, 204, 0.16)";
@@ -340,12 +352,36 @@ export function drawSea(
         ctx.strokeStyle = "rgba(231, 160, 74, 0.7)";
         ctx.strokeRect(x + 4, y + 4, TILE - 8, TILE - 8);
       }
+      if (t !== 1 && !(t === 8 && !sim.flags.mawDead)) {
+        const flow = sampleFlow(sim, regionId, (tx + 0.5) * TILE, (ty + 0.5) * TILE);
+        const mag = Math.hypot(flow.x, flow.y);
+        if (mag > 14) {
+          ctx.strokeStyle = `rgba(150, 214, 204, ${Math.min(0.42, mag / 300)})`;
+          ctx.beginPath();
+          const len = Math.min(10, mag / 14);
+          ctx.moveTo(x + TILE / 2, y + TILE / 2);
+          ctx.lineTo(x + TILE / 2 + (flow.x / mag) * len, y + TILE / 2 + (flow.y / mag) * len);
+          ctx.stroke();
+        }
+      }
     }
   }
 
   if (regionId === "breach") {
     gouge(ctx, camX, camY, 11 * TILE, 3 * TILE + 18);
     gouge(ctx, camX, camY, 13 * TILE + 8, 13 * TILE + 6);
+  }
+
+  ctx.fillStyle = "rgba(186, 206, 198, 0.45)";
+  for (let i = 0; i < 22; i++) {
+    const bx = (i * 211) % (region.w * TILE);
+    const by = (i * 97) % (region.h * TILE);
+    const flow = sampleFlow(sim, regionId, bx, by);
+    const span = 2.4;
+    const u = (sim.time % span) / span;
+    const p = screen(camX, camY, bx + flow.x * u * span + Math.sin(sim.time + i) * 2, by + flow.y * u * span);
+    if (p.x < -4 || p.y < -4 || p.x > VIEW_W + 4 || p.y > VIEW_H + 4) continue;
+    ctx.fillRect(p.x, p.y, 2, 1);
   }
 
   const observer = sim.divers.find((d) => d.id === focusId);

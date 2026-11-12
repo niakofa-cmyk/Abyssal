@@ -20,6 +20,7 @@ import { casesClosedBy } from "./archive.ts";
 import { advanceEcology, createEcology, emitNoise, restorePower, ECOLOGY_EVENTS } from "./ecology.ts";
 import { CREATURE_RESPAWN_RULES, MAX_REWARD_DROPS, rewardForDefeat, reviveRewardDrops } from "./rewards.ts";
 import { LOCKER_SLOTS, SUPPLY_YIELD, drawOne, emptyPack, isPackKind, occupied, packLabel, stow, supplyIndex, type PackSlot } from "./pack.ts";
+import { carry, noteWake, sampleCurrent, sampleFlow, stepFlow } from "./flow.ts";
 
 const SWIM_ACCEL = 920;
 const SWIM_DRAG = 3.4;
@@ -332,12 +333,19 @@ function drive(
   drag: number,
   max: number,
   dt: number,
+  flowX = 0,
+  flowY = 0,
 ) {
   let nx = vx + ax * accel * dt;
   let ny = vy + ay * accel * dt;
   const damp = Math.exp(-drag * dt);
-  nx *= damp;
-  ny *= damp;
+  if (Math.hypot(flowX, flowY) > 8) {
+    nx = flowX + (nx - flowX) * damp;
+    ny = flowY + (ny - flowY) * damp;
+  } else {
+    nx *= damp;
+    ny *= damp;
+  }
   const s = Math.hypot(nx, ny);
   if (s > max) {
     nx = (nx / s) * max;
@@ -1404,6 +1412,7 @@ function stepProjectiles(sim: Sim, dt: number) {
     if (p.life <= 0) continue;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
+    noteWake(sim, p.region, p.x, p.y, p.vx * 0.04 * dt, p.vy * 0.04 * dt);
     if (isSolid(sim.regions[p.region], p.x, p.y, sim.flags.mawDead)) continue;
     if (p.team === "crew") {
       let hit = false;
@@ -1472,6 +1481,7 @@ function stepVehicle(sim: Sim, vehicle: Vehicle, dt: number) {
   }
   const energyMul = vehicle.energy > 4 ? 1 : 0.4;
   const spec = craftOf(vehicle.kind);
+  const flow = sampleCurrent(sim, vehicle.region, vehicle.x, vehicle.y);
   const driven = drive(
     vehicle.vx,
     vehicle.vy,
@@ -1481,14 +1491,14 @@ function stepVehicle(sim: Sim, vehicle: Vehicle, dt: number) {
     spec.drag,
     spec.max * stageMul * energyMul,
     dt,
+    flow.x,
+    flow.y,
   );
   vehicle.vx = driven.vx;
   vehicle.vy = driven.vy;
   vehicle.facing = faceFrom(ax, vehicle.vx, vehicle.facing);
+  if (stage >= 2) noteWake(sim, vehicle.region, vehicle.x, vehicle.y - 8, 0, -16 * dt);
   const tile = tileAt(sim.regions[vehicle.region], vehicle.x, vehicle.y);
-  if (tile === 4) vehicle.vx += 48 * dt;
-  if (tile === 5) vehicle.vx -= 48 * dt;
-  if (tile === 6) vehicle.vy = Math.min(140, vehicle.vy + 180 * dt);
   if (tile === 2) {
     vehicle.hull -= 12 * dt;
     if (vehicle.hull <= 0) destroyVehicle(sim, vehicle);
@@ -1545,16 +1555,15 @@ function stepDiverBody(sim: Sim, diver: Diver, dt: number, selfId: string) {
     return;
   }
   const region = sim.regions[diver.region];
-  const driven = drive(diver.vx, diver.vy, diver.ax, diver.ay, SWIM_ACCEL, SWIM_DRAG, SWIM_MAX, dt);
+  const flow = sampleCurrent(sim, diver.region, diver.x, diver.y);
+  const driven = drive(diver.vx, diver.vy, diver.ax, diver.ay, SWIM_ACCEL, SWIM_DRAG, SWIM_MAX, dt, flow.x, flow.y);
   diver.vx = driven.vx;
   diver.vy = driven.vy;
   const tile = tileAt(region, diver.x, diver.y);
-  if (tile === 4) diver.vx += 68 * dt;
-  if (tile === 5) diver.vx -= 68 * dt;
-  if (tile === 6) diver.vy = Math.min(170, diver.vy + 220 * dt);
   if (tile === 7) diver.o2 = Math.max(0, diver.o2 - 8 * dt);
   diver.facing = faceFrom(diver.ax, diver.vx, diver.facing);
   moveBody(region, diver, 10, 14, dt, sim.flags.mawDead);
+  if (Math.hypot(diver.vx, diver.vy) > 36) noteWake(sim, diver.region, diver.x, diver.y, -diver.vx * 0.2 * dt, -diver.vy * 0.2 * dt);
   if (tile === 2) chip(sim, diver, 16 * dt);
   diver.o2 = Math.max(0, diver.o2 - O2_DRAIN * dt);
   if (diver.o2 <= 0) {
@@ -1682,7 +1691,18 @@ function explore(sim: Sim, diver: Diver) {
   }
 }
 
-function stepPickups(sim: Sim) {
+function stepPickups(sim: Sim, dt: number) {
+  for (const pickup of sim.pickups) {
+    if (pickup.taken || !pickup.reward || !awake(sim, pickup.region)) continue;
+    const flow = sampleFlow(sim, pickup.region, pickup.x, pickup.y);
+    if (Math.hypot(flow.x, flow.y) < 8) continue;
+    const carried = carry(pickup, flow.x, flow.y, dt);
+    const region = sim.regions[pickup.region];
+    const nx = pickup.x + carried.vx * dt;
+    const ny = pickup.y + carried.vy * dt;
+    if (!isSolid(region, nx, pickup.y, sim.flags.mawDead)) pickup.x = nx;
+    if (!isSolid(region, pickup.x, ny, sim.flags.mawDead)) pickup.y = ny;
+  }
   for (const pickup of sim.pickups) {
     if (pickup.taken) continue;
     for (const diver of sim.divers) {
@@ -1719,6 +1739,7 @@ export function stepSim(sim: Sim, dt: number, auth: boolean, selfId: string) {
   for (const toast of sim.toasts) toast.life -= dt;
   sim.toasts = sim.toasts.filter((t) => t.life > 0);
   sim.events.length = 0;
+  stepFlow(sim, dt, (id) => awake(sim, id));
 
   for (const diver of sim.divers) {
     if (diver.kind === "ai" && diver.owner === selfId) thinkAi(sim, diver, auth);
@@ -1743,7 +1764,7 @@ export function stepSim(sim: Sim, dt: number, auth: boolean, selfId: string) {
       if (awake(sim, creature.region)) stepCreature(sim, creature, dt);
     }
     stepProjectiles(sim, dt);
-    stepPickups(sim);
+    stepPickups(sim, dt);
   } else {
     for (const creature of sim.creatures) {
       const dx = creature.netX - creature.x;

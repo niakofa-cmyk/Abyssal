@@ -86,6 +86,7 @@ Held on purpose: no Arctic, no playable surface, no 2.5D renderer.
 ## 8. Living ocean, still unfinished
 
 - [x] One repaired plains grid wakes that district's desk.
+- [x] Shafts and side-currents are a flow. A diver coasts in them. A spilled stack drifts. An empty sector does not tick its wake.
 - [ ] Restoration, noise, and wildlife return stay the systems they are. No new species in this pass.
 - [ ] A second diver can read the woken desk in a real two-browser session. The record is shared once it is filed. That sharing is not browser-certified.
 - [ ] Empty sectors stay asleep. Offline time must not simulate the whole ocean.
